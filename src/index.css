@@ -1,0 +1,138 @@
+@import url('https://fonts.googleapis.com/css2?family=Roboto:wght@300;400;500;700&family=Noto+Sans+JP:wght@300;400;500;700&family=Google+Sans:wght@400;500&display=swap');
+@import "tailwindcss";
+
+@theme {
+  --font-sans: "Roboto", "Noto Sans JP", ui-sans-serif, system-ui, sans-serif;
+  
+  /* Material 3 Colors - Light Default */
+  --m3-primary: #005696;
+  --m3-on-primary: #ffffff;
+  --m3-primary-container: #d6e3ff;
+  --m3-on-primary-container: #001b3e;
+  
+  --m3-secondary: #535f70;
+  --m3-on-secondary: #ffffff;
+  --m3-secondary-container: #d7e3f7;
+  --m3-on-secondary-container: #101c2b;
+  
+  --m3-surface: #f8f9ff;
+  --m3-on-surface: #101c2b;
+  --m3-surface-variant: #e1e2ec;
+  --m3-on-surface-variant: #44474f;
+  
+  --m3-surface-container-low: #f0f3fa;
+  --m3-surface-container: #e9ecf4;
+  --m3-surface-container-high: #e2e6f0;
+  
+  --m3-outline: #74777f;
+  --m3-outline-variant: #c4c6d0;
+}
+
+@layer base {
+  body.dark {
+    /* Sophisticated Midnight Navy Dark Theme */
+    --m3-primary: #abc7ff;
+    --m3-on-primary: #002f5e;
+    --m3-primary-container: #004682;
+    --m3-on-primary-container: #d6e3ff;
+    
+    --m3-surface: #0b141d;
+    --m3-on-surface: #e2e2e6;
+    --m3-surface-variant: #44474f;
+    --m3-on-surface-variant: #c4c6d0;
+    
+    --m3-surface-container-low: #131c26;
+    --m3-surface-container: #1a2530;
+    --m3-surface-container-high: #242f3b;
+    
+    --m3-outline: #8e9199;
+    --m3-outline-variant: #44474f;
+  }
+}
+
+@layer base {
+  body {
+    @apply bg-[var(--m3-surface)] text-[var(--m3-on-surface)] transition-colors duration-500;
+  }
+}
+
+@layer components {
+  /* Polished Segmented Control */
+  .segmented-control {
+    @apply flex p-1 bg-[var(--m3-surface-container-low)] rounded-full border border-[var(--m3-outline-variant)]/20;
+  }
+  
+  .segmented-item {
+    @apply flex-1 py-2 px-4 rounded-full text-sm font-bold transition-all flex items-center justify-center gap-2;
+  }
+  
+  .segmented-item-active {
+    @apply bg-[var(--m3-primary)] text-[var(--m3-on-primary)] shadow-sm;
+  }
+  
+  .segmented-item-inactive {
+    @apply text-[var(--m3-on-surface-variant)] hover:bg-[var(--m3-surface-container-high)];
+  }
+
+  /* Chip/Pill selection */
+  .m3-chip {
+    @apply px-4 py-2 rounded-xl text-xs font-bold border transition-all flex items-center gap-2 cursor-pointer;
+  }
+  
+  .m3-chip-selected {
+    @apply bg-[var(--m3-primary-container)] text-[var(--m3-on-primary-container)] border-[var(--m3-primary)];
+  }
+  
+  .m3-chip-unselected {
+    @apply bg-transparent border-[var(--m3-outline)]/20 text-[var(--m3-on-surface-variant)] hover:bg-[var(--m3-surface-variant)]/30;
+  }
+
+  /* M3 Components */
+  .m3-button-primary {
+    @apply h-14 bg-[var(--m3-primary)] text-[var(--m3-on-primary)] px-6 rounded-2xl font-black text-sm uppercase tracking-widest hover:shadow-lg active:scale-95 disabled:opacity-50 transition-all flex items-center justify-center gap-2 leading-none border border-transparent;
+  }
+  
+  .m3-button-tonal {
+    @apply h-14 bg-[var(--m3-secondary-container)] text-[var(--m3-on-secondary-container)] px-6 rounded-2xl font-bold hover:shadow-md active:scale-95 disabled:opacity-50 transition-all flex items-center justify-center gap-2 leading-none border border-transparent;
+  }
+
+  .m3-button-outline {
+    @apply h-14 bg-transparent border border-[var(--m3-outline-variant)]/30 text-[var(--m3-on-surface)] px-6 rounded-2xl font-bold hover:bg-[var(--m3-surface-container)] active:scale-95 transition-all flex items-center justify-center gap-2 leading-none;
+  }
+
+  .m3-button-error {
+    @apply h-14 bg-[var(--m3-error-container)] text-[var(--m3-on-error-container)] px-6 rounded-2xl font-bold hover:bg-[var(--m3-error)] hover:text-white active:scale-95 transition-all flex items-center justify-center gap-2 leading-none border border-transparent;
+  }
+
+  .m3-button-text {
+    @apply h-14 bg-transparent text-[var(--m3-primary)] px-6 rounded-2xl font-bold hover:bg-[var(--m3-primary)]/5 active:scale-95 transition-all flex items-center justify-center gap-2 leading-none border border-transparent;
+  }
+  
+  .m3-card {
+    @apply bg-[var(--m3-surface-container)] rounded-[28px] p-6 shadow-sm border border-[var(--m3-outline)]/5;
+  }
+  
+  .m3-fab {
+    @apply bg-[var(--m3-primary-container)] text-[var(--m3-on-primary-container)] rounded-[16px] shadow-lg hover:shadow-xl active:scale-95 transition-all flex items-center justify-center;
+  }
+  
+  .m3-card-outline {
+    @apply bg-transparent border border-[var(--m3-outline)] rounded-[28px] p-6;
+  }
+}
+
+/* DayPicker Overlay Customization */
+.rdp {
+  --rdp-accent-color: var(--m3-primary);
+  --rdp-background-color: var(--m3-primary-container);
+}
+
+::-webkit-scrollbar {
+  width: 8px;
+}
+::-webkit-scrollbar-track {
+  @apply bg-transparent;
+}
+::-webkit-scrollbar-thumb {
+  @apply bg-[var(--m3-surface-variant)] rounded-full;
+}

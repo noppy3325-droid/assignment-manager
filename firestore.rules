@@ -1,0 +1,83 @@
+// ===============================================================
+// Assumed Data Model
+// ===============================================================
+//
+// Collection: submissions
+// Document ID: {submissionId}
+// Fields:
+//   - uid: string (required) - Owner's user ID
+//   - title: string (required, 1-100 chars)
+//   - subject: string (required, 1-50 chars)
+//   - deadline: timestamp (required)
+//   - progress: number (required, 0-100)
+//   - status: string (required, ['pending', 'in-progress', 'completed'])
+//   - description: string (optional, 0-1000 chars)
+//   - createdAt: timestamp (required)
+//
+// ===============================================================
+
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // ===============================================================
+    // Helper Functions
+    // ===============================================================
+    
+    function isAuthenticated() {
+      return request.auth != null;
+    }
+    
+    function isOwner(userId) {
+      return isAuthenticated() && request.auth.uid == userId;
+    }
+    
+    function isDocOwner() {
+      return isAuthenticated() && request.auth.uid == resource.data.uid;
+    }
+    
+    function isValidSubmission(data) {
+      return data.keys().hasAll(['uid', 'title', 'subject', 'deadline', 'progress', 'status', 'createdAt']) &&
+             data.uid == request.auth.uid &&
+             data.title is string && data.title.size() >= 1 && data.title.size() <= 100 &&
+             data.subject is string && data.subject.size() >= 1 && data.subject.size() <= 50 &&
+             data.deadline is timestamp &&
+             data.progress is number && data.progress >= 0 && data.progress <= 100 &&
+             data.status in ['pending', 'in-progress', 'completed'] &&
+             data.createdAt is timestamp;
+    }
+
+    function isImmutableFieldUnchanged() {
+      return request.resource.data.uid == resource.data.uid &&
+             request.resource.data.createdAt == resource.data.createdAt;
+    }
+
+    function isValidUserConfig(data) {
+      return data.keys().hasOnly(['theme', 'language', 'subjects']) &&
+             (!('theme' in data) || data.theme in ['light', 'dark']) &&
+             (!('language' in data) || data.language in ['ja', 'en', 'vi']) &&
+             (!('subjects' in data) || data.subjects is list);
+    }
+
+    // ===============================================================
+    // Rules
+    // ===============================================================
+
+    match /users/{userId} {
+      allow read: if isOwner(userId);
+      allow write: if isOwner(userId) && isValidUserConfig(request.resource.data);
+    }
+
+    match /submissions/{submissionId} {
+      allow read: if isDocOwner();
+      allow create: if isAuthenticated() && isValidSubmission(request.resource.data);
+      allow update: if isDocOwner() && isValidSubmission(request.resource.data) && isImmutableFieldUnchanged();
+      allow delete: if isDocOwner();
+    }
+    
+    // Default deny
+    match /{document=**} {
+      allow read, write: if false;
+    }
+  }
+}

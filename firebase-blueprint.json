@@ -1,0 +1,41 @@
+{
+  "entities": {
+    "Submission": {
+      "title": "Submission",
+      "description": "A submission task for a student.",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "uid": { "type": "string", "description": "User ID of the owner" },
+        "title": { "type": "string" },
+        "subject": { "type": "string" },
+        "deadline": { "type": "string", "format": "date-time" },
+        "progress": { "type": "number" },
+        "status": { "type": "string", "enum": ["pending", "in-progress", "completed"] },
+        "description": { "type": "string" },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["uid", "title", "subject", "deadline", "progress", "status"]
+    },
+    "UserConfig": {
+      "title": "UserConfig",
+      "description": "User preferences and configuration.",
+      "type": "object",
+      "properties": {
+        "theme": { "type": "string", "enum": ["light", "dark"] },
+        "language": { "type": "string", "enum": ["ja", "en"] },
+        "subjects": { "type": "array", "items": { "type": "string" } }
+      }
+    }
+  },
+  "firestore": {
+    "/submissions/{submissionId}": {
+      "schema": "Submission",
+      "description": "Collection of submissions"
+    },
+    "/users/{uid}": {
+      "schema": "UserConfig",
+      "description": "User preferences"
+    }
+  }
+}
