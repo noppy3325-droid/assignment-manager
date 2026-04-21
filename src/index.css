@@ -1,8 +1,8 @@
-@import url('https://fonts.googleapis.com/css2?family=Roboto:wght@300;400;500;700&family=Noto+Sans+JP:wght@300;400;500;700&family=Google+Sans:wght@400;500&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Roboto:wght@300;400;500;700&family=Noto+Sans+JP:wght@300;400;500;700&family=Inter:wght@400;500;600;700;800;900&display=swap');
 @import "tailwindcss";
 
 @theme {
-  --font-sans: "Roboto", "Noto Sans JP", ui-sans-serif, system-ui, sans-serif;
+  --font-sans: "Inter", "Roboto", "Noto Sans JP", ui-sans-serif, system-ui, sans-serif;
   
   /* Material 3 Colors - Light Default */
   --m3-primary: #005696;
@@ -15,17 +15,21 @@
   --m3-secondary-container: #d7e3f7;
   --m3-on-secondary-container: #101c2b;
   
-  --m3-surface: #f8f9ff;
-  --m3-on-surface: #101c2b;
+  --m3-surface: #fdfdff;
+  --m3-on-surface: #1a1c1e;
   --m3-surface-variant: #e1e2ec;
   --m3-on-surface-variant: #44474f;
   
-  --m3-surface-container-low: #f0f3fa;
-  --m3-surface-container: #e9ecf4;
-  --m3-surface-container-high: #e2e6f0;
+  --m3-surface-container-low: #f4f6fa;
+  --m3-surface-container: #eaecf1;
+  --m3-surface-container-high: #e4e7ec;
   
   --m3-outline: #74777f;
   --m3-outline-variant: #c4c6d0;
+  
+  --m3-error: #ba1a1a;
+  --m3-error-container: #ffdad6;
+  --m3-on-error-container: #410002;
 }
 
 @layer base {
@@ -36,17 +40,21 @@
     --m3-primary-container: #004682;
     --m3-on-primary-container: #d6e3ff;
     
-    --m3-surface: #0b141d;
+    --m3-surface: #0b1117;
     --m3-on-surface: #e2e2e6;
     --m3-surface-variant: #44474f;
     --m3-on-surface-variant: #c4c6d0;
     
-    --m3-surface-container-low: #131c26;
-    --m3-surface-container: #1a2530;
-    --m3-surface-container-high: #242f3b;
+    --m3-surface-container-low: #121820;
+    --m3-surface-container: #182029;
+    --m3-surface-container-high: #1e2732;
     
     --m3-outline: #8e9199;
     --m3-outline-variant: #44474f;
+
+    --m3-error: #ffb4ab;
+    --m3-error-container: #93000a;
+    --m3-on-error-container: #ffdad6;
   }
 }
 
@@ -54,85 +62,79 @@
   body {
     @apply bg-[var(--m3-surface)] text-[var(--m3-on-surface)] transition-colors duration-500;
   }
+  
+  input[type="text"], input[type="number"], input[type="date"], input[type="time"], textarea {
+    @apply transition-all duration-300 placeholder-[var(--m3-on-surface-variant)]/50;
+  }
+  input:focus, textarea:focus {
+    @apply bg-[var(--m3-surface-container-high)] border-[var(--m3-primary)]/40 ring-4 ring-[var(--m3-primary)]/10 shadow-sm outline-none;
+  }
 }
 
 @layer components {
   /* Polished Segmented Control */
   .segmented-control {
-    @apply flex p-1 bg-[var(--m3-surface-container-low)] rounded-full border border-[var(--m3-outline-variant)]/20;
+    @apply flex p-1.5 bg-[var(--m3-surface-container-low)] rounded-full border border-[var(--m3-outline-variant)]/20 shadow-inner;
   }
   
   .segmented-item {
-    @apply flex-1 py-2 px-4 rounded-full text-sm font-bold transition-all flex items-center justify-center gap-2;
+    @apply flex-1 py-2.5 px-4 rounded-full text-sm font-bold transition-all duration-300 flex items-center justify-center gap-2;
   }
   
   .segmented-item-active {
-    @apply bg-[var(--m3-primary)] text-[var(--m3-on-primary)] shadow-sm;
+    @apply bg-[var(--m3-primary)] text-[var(--m3-on-primary)] shadow-md;
   }
   
   .segmented-item-inactive {
-    @apply text-[var(--m3-on-surface-variant)] hover:bg-[var(--m3-surface-container-high)];
+    @apply text-[var(--m3-on-surface-variant)] hover:text-[var(--m3-on-surface)] hover:bg-[var(--m3-surface-variant)]/50;
   }
 
   /* Chip/Pill selection */
   .m3-chip {
-    @apply px-4 py-2 rounded-xl text-xs font-bold border transition-all flex items-center gap-2 cursor-pointer;
+    @apply px-4 py-2 rounded-2xl text-xs font-bold border transition-all duration-300 flex items-center gap-2 cursor-pointer;
   }
   
   .m3-chip-selected {
-    @apply bg-[var(--m3-primary-container)] text-[var(--m3-on-primary-container)] border-[var(--m3-primary)];
+    @apply bg-[var(--m3-primary-container)] text-[var(--m3-on-primary-container)] border-[var(--m3-primary)] shadow-sm;
   }
   
   .m3-chip-unselected {
-    @apply bg-transparent border-[var(--m3-outline)]/20 text-[var(--m3-on-surface-variant)] hover:bg-[var(--m3-surface-variant)]/30;
+    @apply bg-transparent border-[var(--m3-outline)]/20 text-[var(--m3-on-surface-variant)] hover:bg-[var(--m3-surface-variant)]/40 hover:border-[var(--m3-outline)]/40;
   }
 
   /* M3 Components */
   .m3-button-primary {
-    @apply h-14 bg-[var(--m3-primary)] text-[var(--m3-on-primary)] px-6 rounded-2xl font-black text-sm uppercase tracking-widest hover:shadow-lg active:scale-95 disabled:opacity-50 transition-all flex items-center justify-center gap-2 leading-none border border-transparent;
+    @apply h-14 bg-[var(--m3-primary)] text-[var(--m3-on-primary)] px-6 rounded-2xl font-black text-sm uppercase tracking-widest shadow-md shadow-[var(--m3-primary)]/20 hover:shadow-lg hover:shadow-[var(--m3-primary)]/30 active:scale-[0.98] disabled:opacity-50 transition-all flex items-center justify-center gap-2 border border-[var(--m3-primary)]/10;
   }
   
   .m3-button-tonal {
-    @apply h-14 bg-[var(--m3-secondary-container)] text-[var(--m3-on-secondary-container)] px-6 rounded-2xl font-bold hover:shadow-md active:scale-95 disabled:opacity-50 transition-all flex items-center justify-center gap-2 leading-none border border-transparent;
+    @apply h-14 bg-[var(--m3-secondary-container)] text-[var(--m3-on-secondary-container)] px-6 rounded-2xl font-bold active:scale-[0.98] disabled:opacity-50 transition-all flex items-center justify-center gap-2 hover:bg-[var(--m3-secondary-container)]/80;
   }
 
   .m3-button-outline {
-    @apply h-14 bg-transparent border border-[var(--m3-outline-variant)]/30 text-[var(--m3-on-surface)] px-6 rounded-2xl font-bold hover:bg-[var(--m3-surface-container)] active:scale-95 transition-all flex items-center justify-center gap-2 leading-none;
+    @apply h-14 bg-[var(--m3-surface)] border-2 border-[var(--m3-outline-variant)]/40 text-[var(--m3-on-surface)] px-6 rounded-2xl font-bold hover:bg-[var(--m3-surface-container)] hover:border-[var(--m3-outline-variant)] active:scale-[0.98] transition-all flex items-center justify-center gap-2;
   }
 
   .m3-button-error {
-    @apply h-14 bg-[var(--m3-error-container)] text-[var(--m3-on-error-container)] px-6 rounded-2xl font-bold hover:bg-[var(--m3-error)] hover:text-white active:scale-95 transition-all flex items-center justify-center gap-2 leading-none border border-transparent;
+    @apply h-14 bg-[var(--m3-error-container)] text-[var(--m3-on-error-container)] px-6 rounded-2xl font-black text-sm uppercase tracking-widest active:scale-[0.98] transition-all flex items-center justify-center gap-2 hover:bg-[var(--m3-error)] hover:text-white;
   }
 
   .m3-button-text {
-    @apply h-14 bg-transparent text-[var(--m3-primary)] px-6 rounded-2xl font-bold hover:bg-[var(--m3-primary)]/5 active:scale-95 transition-all flex items-center justify-center gap-2 leading-none border border-transparent;
+    @apply h-14 bg-transparent text-[var(--m3-primary)] px-6 rounded-2xl font-bold hover:bg-[var(--m3-primary)]/10 active:scale-[0.98] transition-all flex items-center justify-center gap-2;
   }
   
   .m3-card {
-    @apply bg-[var(--m3-surface-container)] rounded-[28px] p-6 shadow-sm border border-[var(--m3-outline)]/5;
+    @apply bg-[var(--m3-surface-container)] rounded-[28px] p-6 shadow-sm border border-white/5 dark:border-white/5;
   }
-  
-  .m3-fab {
-    @apply bg-[var(--m3-primary-container)] text-[var(--m3-on-primary-container)] rounded-[16px] shadow-lg hover:shadow-xl active:scale-95 transition-all flex items-center justify-center;
-  }
-  
-  .m3-card-outline {
-    @apply bg-transparent border border-[var(--m3-outline)] rounded-[28px] p-6;
-  }
-}
-
-/* DayPicker Overlay Customization */
-.rdp {
-  --rdp-accent-color: var(--m3-primary);
-  --rdp-background-color: var(--m3-primary-container);
 }
 
 ::-webkit-scrollbar {
   width: 8px;
+  height: 8px;
 }
 ::-webkit-scrollbar-track {
   @apply bg-transparent;
 }
 ::-webkit-scrollbar-thumb {
-  @apply bg-[var(--m3-surface-variant)] rounded-full;
+  @apply bg-[var(--m3-outline-variant)]/50 hover:bg-[var(--m3-outline)]/60 rounded-full transition-colors;
 }

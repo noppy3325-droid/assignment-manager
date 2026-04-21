@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { motion, AnimatePresence, LayoutGroup } from 'motion/react';
-import { Plus, Calendar, BookOpen, CheckCircle2, Clock, ChevronRight, X, Settings, LogOut, LogIn, Trash2, Sun, Moon, Zap, Play, Pause, Square, Edit3, Coffee, Brain, Eye, EyeOff } from 'lucide-react';
+import { Plus, Calendar, BookOpen, CheckCircle2, Clock, ChevronRight, X, Settings, LogOut, LogIn, Trash2, Sun, Moon, Zap, Play, Pause, Square, Edit3, Coffee, Brain, Eye, EyeOff, AlertCircle } from 'lucide-react';
 import { format, differenceInDays, isPast, isToday, startOfDay, formatDistanceToNow } from 'date-fns';
 import { ja } from 'date-fns/locale';
 import { DayPicker } from 'react-day-picker';
@@ -802,23 +802,23 @@ export default function App() {
             initial={{ opacity: 0, x: 20 }}
             animate={{ opacity: 1, x: 0 }}
             transition={{ duration: 0.4, ease: "easeOut" }}
-            className="flex items-center gap-2 sm:gap-4"
+            className="flex items-center gap-1 sm:gap-3"
           >
             <button 
               onClick={() => setIsSettingsOpen(true)}
-              className="p-3 rounded-full hover:bg-[var(--m3-surface-container)] text-[var(--m3-on-surface-variant)] transition-colors"
+              className="p-3 rounded-full hover:bg-[var(--m3-surface-container)] text-[var(--m3-on-surface-variant)] transition-all active:scale-95"
               title={t.settings}
             >
-              <Settings className="w-5 h-5" />
+              <Settings className="w-5 h-5 sm:w-6 sm:h-6" />
             </button>
             <button 
               onClick={logout}
-              className="p-3 rounded-full hover:bg-[var(--m3-surface-container)] text-[var(--m3-on-surface-variant)] hover:text-[var(--m3-error)] transition-colors"
+              className="p-3 rounded-full hover:bg-[var(--m3-error-container)]/50 text-[var(--m3-on-surface-variant)] hover:text-[var(--m3-error)] transition-all active:scale-95"
               title="Logout"
             >
-              <LogOut className="w-5 h-5" />
+              <LogOut className="w-5 h-5 sm:w-6 sm:h-6" />
             </button>
-            <div className="w-10 h-10 sm:w-12 sm:h-12 rounded-full m3-card p-0 flex items-center justify-center overflow-hidden border border-[var(--m3-outline)]">
+            <div className="w-10 h-10 sm:w-12 sm:h-12 rounded-full m3-card p-0 flex items-center justify-center overflow-hidden border-2 border-[var(--m3-primary)]/20 shadow-sm ml-2">
               {user.photoURL ? (
                 <img src={user.photoURL} alt={user.displayName || ''} className="w-full h-full object-cover" referrerPolicy="no-referrer" />
               ) : (
@@ -867,7 +867,7 @@ export default function App() {
               initial={{ opacity: 0, y: 10 }}
               animate={{ opacity: 1, y: 0 }}
               transition={{ duration: 0.4, ease: "easeOut" }}
-              className="bg-[var(--m3-primary-container)] rounded-[28px] p-6 w-full min-w-[180px] lg:min-w-0 shadow-sm"
+              className="bg-[var(--m3-primary-container)] rounded-[28px] p-6 w-full min-w-[180px] lg:min-w-0 shadow-sm shrink-0"
             >
               <div className="text-[10px] text-[var(--m3-on-primary-container)] opacity-70 uppercase tracking-[0.15em] font-black mb-1">{t.progress}</div>
               <div className="flex items-baseline gap-1 text-[var(--m3-on-primary-container)]">
@@ -888,7 +888,7 @@ export default function App() {
               initial={{ opacity: 0, y: 20 }}
               animate={{ opacity: 1, y: 0 }}
               transition={{ delay: 0.1, duration: 0.4, ease: "easeOut" }}
-              className="bg-[var(--m3-surface-container-high)] rounded-[28px] p-6 w-full min-w-[220px] lg:min-w-0 lg:flex-none shadow-sm border border-[var(--m3-outline-variant)]/20"
+              className="bg-[var(--m3-surface-container-high)] rounded-[28px] p-6 w-full min-w-[220px] lg:min-w-0 shadow-sm border border-[var(--m3-outline-variant)]/20 shrink-0"
             >
               <div className="text-[10px] lg:text-[11px] text-[var(--m3-on-surface-variant)] uppercase tracking-wider font-black mb-2">{t.upcoming}</div>
               <div className="text-3xl lg:text-4xl font-light tracking-tighter text-[var(--m3-on-surface)]">
@@ -901,7 +901,7 @@ export default function App() {
               initial={{ opacity: 0, y: 20 }}
               animate={{ opacity: 1, y: 0 }}
               transition={{ delay: 0.2, duration: 0.4, ease: "easeOut" }}
-              className="m3-card flex-1 min-w-[220px] lg:min-w-0 shadow-none border border-[var(--m3-outline)]/10 hidden sm:block overflow-hidden"
+              className="m3-card w-full min-w-[220px] lg:min-w-0 shadow-none border border-[var(--m3-outline)]/10 hidden sm:flex flex-col shrink-0 mb-8"
             >
               <div className="text-[10px] lg:text-[11px] text-[var(--m3-on-surface-variant)] uppercase tracking-wider font-bold mb-3">{t.recentActivity}</div>
               <div className="space-y-3">
@@ -943,7 +943,7 @@ export default function App() {
                   key={subject} 
                   layout
                   transition={{ 
-                    layout: { duration: 0.2, ease: "easeOut" },
+                    layout: { duration: 0.3, type: "spring", stiffness: 300, damping: 30 },
                     opacity: { duration: 0.2 }
                   }}
                   initial={{ opacity: 0, y: 20 }}
@@ -951,19 +951,19 @@ export default function App() {
                   exit={{ opacity: 0, scale: 0.95 }}
                   className="space-y-4"
                 >
-                  <div className="flex items-center gap-2 px-1">
-                    <div className="w-0.5 h-4 bg-ios-blue rounded-full" />
-                    <h2 className="text-lg font-bold text-text-primary">{subject}</h2>
-                    <span className="text-[10px] font-bold text-text-secondary bg-slate-100 dark:bg-slate-800 px-1.5 py-0.5 rounded">
-                      {(items as Submission[]).length}件
+                  <div className="flex items-center gap-2 px-2 border-b border-[var(--m3-outline)]/10 pb-2">
+                    <div className="w-1 h-4 bg-[var(--m3-primary)] rounded-full" />
+                    <h2 className="text-xl font-black text-[var(--m3-on-surface)] tracking-tight">{subject}</h2>
+                    <span className="text-[10px] font-black text-[var(--m3-on-surface-variant)] bg-[var(--m3-surface-container-high)] px-2 py-0.5 rounded-md ml-2">
+                      {(items as Submission[]).length}
                     </span>
                   </div>
                   <motion.div 
                     layout
                     transition={{ duration: 0.3, ease: "easeOut" }}
                     className={cn(
-                      "grid gap-4",
-                      activeTab === 'history' ? "grid-cols-1" : "grid-cols-1 sm:grid-cols-2 lg:grid-cols-3"
+                      "grid gap-4 sm:gap-6",
+                      activeTab === 'history' ? "grid-cols-1 md:grid-cols-2" : "grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4"
                     )}
                   >
                     <AnimatePresence mode="popLayout" initial={false}>
@@ -1113,7 +1113,7 @@ export default function App() {
                     type="number"
                     value={pomodoroDurations.work / 60}
                     onChange={(e) => setPomodoroDurations(prev => ({ ...prev, work: parseInt(e.target.value) * 60 || 0 }))}
-                    className="w-full px-4 py-2 rounded-xl bg-[var(--m3-surface-container)] border border-[var(--m3-outline)]/10 focus:outline-none focus:ring-2 focus:ring-[var(--m3-primary)]/20 text-sm font-bold text-[var(--m3-on-surface)]"
+                    className="w-full px-4 py-2 rounded-xl bg-[var(--m3-surface-container)] border border-[var(--m3-outline)]/10 focus:outline-none focus:ring-4 focus:ring-[var(--m3-primary)]/10 text-sm font-bold text-[var(--m3-on-surface)] transition-all"
                   />
                 </div>
                 <div className="space-y-1">
@@ -1122,7 +1122,7 @@ export default function App() {
                     type="number"
                     value={pomodoroDurations.break / 60}
                     onChange={(e) => setPomodoroDurations(prev => ({ ...prev, break: parseInt(e.target.value) * 60 || 0 }))}
-                    className="w-full px-4 py-2 rounded-xl bg-[var(--m3-surface-container)] border border-[var(--m3-outline)]/10 focus:outline-none focus:ring-2 focus:ring-[var(--m3-primary)]/20 text-sm font-bold text-[var(--m3-on-surface)]"
+                    className="w-full px-4 py-2 rounded-xl bg-[var(--m3-surface-container)] border border-[var(--m3-outline)]/10 focus:outline-none focus:ring-4 focus:ring-[var(--m3-primary)]/10 text-sm font-bold text-[var(--m3-on-surface)] transition-all"
                   />
                 </div>
               </div>
@@ -1159,7 +1159,7 @@ export default function App() {
                   value={newSubject}
                   onChange={(e) => setNewSubject(e.target.value)}
                   placeholder={t.newSubjectPlaceholder}
-                  className="flex-1 px-4 py-3 rounded-xl bg-[var(--m3-surface-container)] border border-[var(--m3-outline)]/10 focus:outline-none focus:ring-2 focus:ring-[var(--m3-primary)]/20 text-sm font-medium text-[var(--m3-on-surface)]"
+                  className="flex-1 px-4 py-3 rounded-xl bg-[var(--m3-surface-container)] border border-[var(--m3-outline)]/10 focus:outline-none focus:ring-4 focus:ring-[var(--m3-primary)]/10 text-sm font-medium text-[var(--m3-on-surface)] transition-all"
                   onKeyDown={(e) => {
                     if (e.key === 'Enter' && newSubject.trim()) {
                       if (!subjects.includes(newSubject.trim())) {
@@ -1250,12 +1250,12 @@ export default function App() {
                         </span>
                       </span>
                     </div>
-                    <div className="h-2 w-full bg-[var(--m3-surface-variant)] rounded-full overflow-hidden">
+                    <div className="h-2 w-full bg-[var(--m3-surface-variant)] rounded-full overflow-hidden shadow-inner">
                       <motion.div 
                         initial={{ width: 0 }}
                         animate={{ width: `${selectedSubmission.progress}%` }}
-                        transition={{ duration: 0.8, ease: "easeOut" }}
-                        className="h-full bg-[var(--m3-primary)]"
+                        transition={{ duration: 0.8, ease: [0.16, 1, 0.3, 1] }}
+                        className="h-full bg-[var(--m3-primary)] shadow-sm"
                       />
                     </div>
                   </div>
@@ -1384,7 +1384,7 @@ export default function App() {
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                   <div className="space-y-2">
                     <label className="text-xs font-bold text-[var(--m3-on-surface-variant)] uppercase tracking-widest px-1">{t.title}</label>
-                    <input name="title" required type="text" placeholder={t.titlePlaceholder} className="w-full px-5 py-4 rounded-2xl bg-[var(--m3-surface-container)] border border-[var(--m3-outline)]/10 focus:outline-none focus:ring-2 focus:ring-[var(--m3-primary)]/20 font-medium text-[var(--m3-on-surface)]" />
+                    <input name="title" required type="text" placeholder={t.titlePlaceholder} className="w-full px-5 py-4 rounded-2xl bg-[var(--m3-surface-container)] border border-[var(--m3-outline)]/10 focus:outline-none focus:ring-4 focus:ring-[var(--m3-primary)]/10 font-bold text-[var(--m3-on-surface)] transition-all placeholder:font-medium" />
                   </div>
                   <div className="space-y-2">
                     <label className="text-xs font-black text-[var(--m3-on-surface-variant)] uppercase tracking-widest px-1">{t.subject}</label>
@@ -1395,7 +1395,7 @@ export default function App() {
                         type="text" 
                         list="subjects"
                         placeholder={t.subjectPlaceholder} 
-                        className="w-full px-5 py-4 rounded-2xl bg-[var(--m3-surface-container)] border border-[var(--m3-outline)]/10 focus:outline-none focus:border-[var(--m3-primary)] focus:bg-[var(--m3-surface)] transition-all font-bold text-[var(--m3-on-surface)]" 
+                        className="w-full px-5 py-4 rounded-2xl bg-[var(--m3-surface-container)] border border-[var(--m3-outline)]/10 focus:outline-none focus:ring-4 focus:ring-[var(--m3-primary)]/10 font-bold text-[var(--m3-on-surface)] transition-all placeholder:font-medium" 
                       />
                       <div className="absolute bottom-0 left-1/2 -translate-x-1/2 w-0 h-0.5 bg-[var(--m3-primary)] group-focus-within:w-[80%] transition-all duration-300 rounded-full" />
                     </div>
@@ -1442,11 +1442,11 @@ export default function App() {
                     >
                       <div className="space-y-1">
                         <label className="text-[10px] font-bold text-[var(--m3-on-surface-variant)] uppercase">{t.startPage}</label>
-                        <input name="startPage" type="number" placeholder="0" className="w-full px-4 py-3 rounded-xl bg-[var(--m3-surface-container)] border border-[var(--m3-outline)]/10 text-sm italic" />
+                        <input name="startPage" type="number" placeholder="0" className="w-full px-4 py-3 rounded-xl bg-[var(--m3-surface-container)] border border-[var(--m3-outline)]/10 text-sm font-bold focus:outline-none focus:ring-4 focus:ring-[var(--m3-primary)]/10 transition-all placeholder:font-medium" />
                       </div>
                       <div className="space-y-1">
                         <label className="text-[10px] font-bold text-[var(--m3-on-surface-variant)] uppercase">{t.endPage}</label>
-                        <input name="endPage" type="number" placeholder="100" className="w-full px-4 py-3 rounded-xl bg-[var(--m3-surface-container)] border border-[var(--m3-outline)]/10 text-sm italic" />
+                        <input name="endPage" type="number" placeholder="100" className="w-full px-4 py-3 rounded-xl bg-[var(--m3-surface-container)] border border-[var(--m3-outline)]/10 text-sm font-bold focus:outline-none focus:ring-4 focus:ring-[var(--m3-primary)]/10 transition-all placeholder:font-medium" />
                       </div>
                     </motion.div>
                   )}
@@ -1466,14 +1466,14 @@ export default function App() {
                           date.setFullYear(y, m - 1, d);
                           setSelectedDate(date);
                         }}
-                        className="flex-1 px-5 py-4 rounded-2xl bg-[var(--m3-surface-container)] border border-[var(--m3-outline)]/10 focus:outline-none focus:ring-2 focus:ring-[var(--m3-primary)]/20 font-bold text-[var(--m3-on-surface)]"
+                        className="flex-1 px-5 py-4 rounded-2xl bg-[var(--m3-surface-container)] border border-[var(--m3-outline)]/10 focus:outline-none focus:ring-4 focus:ring-[var(--m3-primary)]/10 font-bold text-[var(--m3-on-surface)] transition-all"
                       />
                       <input 
                         name="deadlineTime"
                         type="time"
                         required
                         defaultValue="23:59"
-                        className="w-full sm:w-32 px-5 py-4 rounded-2xl bg-[var(--m3-surface-container)] border border-[var(--m3-outline)]/10 focus:outline-none focus:ring-2 focus:ring-[var(--m3-primary)]/20 font-bold text-[var(--m3-on-surface)]"
+                        className="w-full sm:w-32 px-5 py-4 rounded-2xl bg-[var(--m3-surface-container)] border border-[var(--m3-outline)]/10 focus:outline-none focus:ring-4 focus:ring-[var(--m3-primary)]/10 font-bold text-[var(--m3-on-surface)] transition-all"
                       />
                     </div>
                   </div>
@@ -1501,10 +1501,10 @@ export default function App() {
                     <input type="hidden" name="priority" value={modalPriority} />
                   </div>
                 </div>
-                <div className="space-y-2">
-                  <label className="text-xs font-bold text-[var(--m3-on-surface-variant)] uppercase tracking-widest px-1">{t.details}</label>
-                  <textarea name="description" placeholder={t.descriptionPlaceholder} rows={3} className="w-full px-5 py-4 rounded-2xl bg-[var(--m3-surface-container)] border border-[var(--m3-outline)]/10 focus:outline-none focus:ring-2 focus:ring-[var(--m3-primary)]/20 font-medium resize-none text-[var(--m3-on-surface)]" />
-                </div>
+                  <div className="space-y-2">
+                    <label className="text-[10px] font-black text-[var(--m3-on-surface-variant)] uppercase tracking-[0.1em] px-1">{t.details}</label>
+                    <textarea name="description" placeholder={t.descriptionPlaceholder} rows={3} className="w-full px-5 py-4 rounded-2xl bg-[var(--m3-surface-container)] border border-[var(--m3-outline)]/10 focus:outline-none focus:ring-4 focus:ring-[var(--m3-primary)]/10 font-medium resize-none text-[var(--m3-on-surface)] transition-all" />
+                  </div>
                 <button 
                   type="submit"
                   className="w-full m3-button-primary"
@@ -1732,7 +1732,7 @@ export default function App() {
                     value={progressInputValue}
                     onChange={(e) => setProgressInputValue(e.target.value)}
                     placeholder="0"
-                    className="w-full text-4xl sm:text-6xl font-black text-center border-b-4 border-[var(--m3-primary)] focus:outline-none bg-transparent text-[var(--m3-on-surface)] transition-all"
+                    className="w-full text-4xl sm:text-6xl font-black text-center border-none rounded-2xl bg-[var(--m3-surface-container)] py-8 focus:outline-none focus:ring-4 focus:ring-[var(--m3-primary)]/10 text-[var(--m3-on-surface)] transition-all placeholder-[var(--m3-on-surface-variant)]/30"
                     onKeyDown={(e) => {
                       if (e.key === 'Enter') {
                         e.preventDefault();
@@ -1826,7 +1826,7 @@ export default function App() {
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                   <div className="space-y-2">
                     <label className="text-xs font-bold text-[var(--m3-on-surface-variant)] uppercase tracking-widest px-1">{t.title}</label>
-                    <input name="title" defaultValue={editData.title} required type="text" className="w-full px-5 py-4 rounded-2xl bg-[var(--m3-surface-container)] border border-[var(--m3-outline)]/10 focus:outline-none focus:ring-2 focus:ring-[var(--m3-primary)]/20 font-medium text-[var(--m3-on-surface)]" />
+                    <input name="title" defaultValue={editData.title} required type="text" className="w-full px-5 py-4 rounded-2xl bg-[var(--m3-surface-container)] border border-[var(--m3-outline)]/10 focus:outline-none focus:ring-4 focus:ring-[var(--m3-primary)]/10 font-bold text-[var(--m3-on-surface)] transition-all placeholder:font-medium" />
                   </div>
                   <div className="space-y-2">
                     <label className="text-xs font-black text-[var(--m3-on-surface-variant)] uppercase tracking-widest px-1">{t.subject}</label>
@@ -1837,7 +1837,7 @@ export default function App() {
                         required 
                         type="text" 
                         list="subjects-edit"
-                        className="w-full px-5 py-4 rounded-2xl bg-[var(--m3-surface-container)] border border-[var(--m3-outline)]/10 focus:outline-none focus:border-[var(--m3-primary)] focus:bg-[var(--m3-surface)] transition-all font-bold text-[var(--m3-on-surface)]" 
+                        className="w-full px-5 py-4 rounded-2xl bg-[var(--m3-surface-container)] border border-[var(--m3-outline)]/10 focus:outline-none focus:ring-4 focus:ring-[var(--m3-primary)]/10 font-bold text-[var(--m3-on-surface)] transition-all placeholder:font-medium" 
                       />
                       <div className="absolute bottom-0 left-1/2 -translate-x-1/2 w-0 h-0.5 bg-[var(--m3-primary)] group-focus-within:w-[80%] transition-all duration-300 rounded-full" />
                     </div>
@@ -1861,14 +1861,14 @@ export default function App() {
                           date.setFullYear(y, m - 1, d);
                           setSelectedDate(date);
                         }}
-                        className="flex-1 px-5 py-4 rounded-2xl bg-[var(--m3-surface-container)] border border-[var(--m3-outline)]/10 focus:outline-none focus:ring-2 focus:ring-[var(--m3-primary)]/20 font-bold text-[var(--m3-on-surface)]"
+                        className="flex-1 px-5 py-4 rounded-2xl bg-[var(--m3-surface-container)] border border-[var(--m3-outline)]/10 focus:outline-none focus:ring-4 focus:ring-[var(--m3-primary)]/10 font-bold text-[var(--m3-on-surface)] transition-all"
                       />
                       <input 
                         name="deadlineTime"
                         type="time"
                         required
                         defaultValue={editData.deadline ? format(editData.deadline, 'HH:mm') : "23:59"}
-                        className="w-full sm:w-32 px-5 py-4 rounded-2xl bg-[var(--m3-surface-container)] border border-[var(--m3-outline)]/10 focus:outline-none focus:ring-2 focus:ring-[var(--m3-primary)]/20 font-bold text-[var(--m3-on-surface)]"
+                        className="w-full sm:w-32 px-5 py-4 rounded-2xl bg-[var(--m3-surface-container)] border border-[var(--m3-outline)]/10 focus:outline-none focus:ring-4 focus:ring-[var(--m3-primary)]/10 font-bold text-[var(--m3-on-surface)] transition-all"
                       />
                     </div>
                   </div>
@@ -1896,10 +1896,10 @@ export default function App() {
                     <input type="hidden" name="priority" value={modalPriority} />
                   </div>
                 </div>
-                <div className="space-y-2">
-                  <label className="text-xs font-bold text-[var(--m3-on-surface-variant)] uppercase tracking-widest px-1">{t.details}</label>
-                  <textarea name="description" defaultValue={editData.description} rows={3} className="w-full px-5 py-4 rounded-2xl bg-[var(--m3-surface-container)] border border-[var(--m3-outline)]/10 focus:outline-none focus:ring-2 focus:ring-[var(--m3-primary)]/20 font-medium resize-none text-[var(--m3-on-surface)]" />
-                </div>
+                  <div className="space-y-2">
+                    <label className="text-[10px] font-black text-[var(--m3-on-surface-variant)] uppercase tracking-[0.1em] px-1">{t.details}</label>
+                    <textarea name="description" defaultValue={editData.description} rows={3} className="w-full px-5 py-4 rounded-2xl bg-[var(--m3-surface-container)] border border-[var(--m3-outline)]/10 focus:outline-none focus:ring-4 focus:ring-[var(--m3-primary)]/10 font-medium resize-none text-[var(--m3-on-surface)] transition-all" />
+                  </div>
                 <div className="flex gap-4">
                   <button 
                     type="button"
@@ -2105,7 +2105,7 @@ function SubmissionCard({
           scale: { duration: 0.2 }
         }}
         whileTap={{ scale: 0.99 }}
-        className="group relative bg-[var(--m3-surface-container)] rounded-[20px] p-4 flex items-center gap-4 border border-[var(--m3-outline)]/10"
+        className="group relative bg-[var(--m3-surface-container)] rounded-[20px] p-5 flex items-center gap-4 border border-[var(--m3-outline)]/10"
       >
         <div className="w-10 h-10 rounded-full bg-[var(--m3-surface-variant)] flex items-center justify-center shrink-0">
           <BookOpen className="w-5 h-5 text-[var(--m3-on-surface-variant)]" />
@@ -2140,88 +2140,110 @@ function SubmissionCard({
     <motion.div
       layout
       layoutId={submission.id}
-      initial={{ opacity: 0, scale: 0.9 }}
-      animate={{ opacity: 1, scale: 1 }}
-      exit={{ opacity: 0, scale: 0.9 }}
+      initial={{ opacity: 0, scale: 0.95, y: 10 }}
+      animate={{ opacity: 1, scale: 1, y: 0 }}
+      exit={{ opacity: 0, scale: 0.95, y: -10 }}
       transition={{ 
-        layout: { duration: 0.2, ease: "easeOut" },
+        layout: { duration: 0.3, type: "spring", stiffness: 300, damping: 30 },
         opacity: { duration: 0.2 },
         scale: { duration: 0.2 }
       }}
       onClick={onClick}
-      whileTap={{ scale: 0.99 }}
-      className="group relative cursor-pointer bg-[var(--m3-surface-container)] rounded-[28px] p-5 border border-[var(--m3-outline)]/10 hover:border-[var(--m3-primary)]/20 hover:shadow-xl flex flex-col gap-4 overflow-hidden"
+      whileTap={{ scale: 0.98 }}
+      className={cn(
+        "group relative cursor-pointer bg-[var(--m3-surface-container)] rounded-[32px] p-8 border border-white/10 dark:border-white/5 hover:border-[var(--m3-primary)]/30 hover:shadow-xl hover:shadow-[var(--m3-primary)]/10 flex flex-col gap-6 overflow-hidden transition-all duration-300",
+        submission.priority === 'high' && submission.status !== 'completed' && "border-red-500/30 ring-2 ring-red-500/10 bg-gradient-to-br from-[var(--m3-surface-container)] to-red-500/5"
+      )}
     >
-      <div className="flex items-start justify-between">
-        <div className="flex flex-col gap-1.5 min-w-0">
+      {submission.priority === 'high' && submission.status !== 'completed' && (
+        <div className="absolute top-0 right-0 w-24 h-24 pointer-events-none">
+          <div className="absolute top-1 right-1 w-2 h-2 bg-red-500 rounded-full animate-ping" />
+        </div>
+      )}
+      <div className="flex items-start justify-between gap-4">
+        <div className="flex flex-col gap-2 min-w-0 pr-4">
           <div className="flex items-center gap-2">
             <motion.span 
               layoutId={`subject-${submission.id}`} 
               transition={{ duration: 0.25, ease: "easeOut" }}
-              className="text-[10px] font-black uppercase tracking-[0.15em] text-[var(--m3-primary)]"
+              className="text-[11px] font-black uppercase tracking-[0.2em] text-[var(--m3-primary)]"
             >
               {submission.subject}
             </motion.span>
             <div className={cn(
-              "w-1.5 h-1.5 rounded-full",
-              submission.priority === 'high' ? "bg-red-500 shadow-[0_0_8px_rgba(239,68,68,0.5)]" : 
-              submission.priority === 'medium' ? "bg-orange-500" : "bg-blue-500"
-            )} />
+              "flex items-center gap-1 px-2 py-0.5 rounded-full text-[9px] font-black uppercase tracking-tighter",
+              submission.priority === 'high' ? "bg-red-500 text-white shadow-[0_0_8px_rgba(239,68,68,0.5)]" : 
+              submission.priority === 'medium' ? "bg-orange-500 text-white" : "bg-blue-500 text-white"
+            )}>
+              {submission.priority === 'high' && <AlertCircle className="w-2.5 h-2.5" />}
+              {t[submission.priority]}
+            </div>
           </div>
           <motion.h3 
             layoutId={`title-${submission.id}`} 
             transition={{ duration: 0.25, ease: "easeOut" }}
-            className="text-lg font-black text-[var(--m3-on-surface)] leading-tight tracking-tight line-clamp-2"
+            className={cn(
+              "text-[19px] font-bold text-[var(--m3-on-surface)] leading-snug tracking-tight line-clamp-2",
+              submission.priority === 'high' && "text-red-600 dark:text-red-400"
+            )}
           >
             {submission.title}
           </motion.h3>
         </div>
         <div className="flex flex-col items-end gap-2 shrink-0">
           <div className={cn(
-            "text-[10px] font-black px-3 py-1 rounded-full uppercase tracking-wider",
-            urgencyStyles.tag
+            "text-[11px] font-black px-4 py-1.5 rounded-xl uppercase tracking-wider shadow-sm",
+            urgencyStyles.tag,
+            submission.priority === 'high' && submission.status !== 'completed' && "animate-pulse"
           )}>
             {urgencyStyles.label}
           </div>
         </div>
       </div>
 
-      <div className="flex items-end justify-between mt-auto">
-        <div className="flex flex-col gap-1">
-          <div className="flex items-center gap-1.5 text-[var(--m3-on-surface-variant)]">
-            <Calendar className="w-3 h-3" />
-            <span className="text-[11px] font-bold">
-              {format(submission.deadline, 'M/d' + (submission.deadline.getHours() === 23 && submission.deadline.getMinutes() === 59 ? '' : ' HH:mm'))}
-            </span>
-            <span className={cn(
-              "text-[10px] font-medium px-1.5 py-0.5 rounded-md",
-              isOverdue ? "bg-[var(--m3-error-container)] text-[var(--m3-on-error-container)]" : "bg-[var(--m3-surface-variant)] text-[var(--m3-on-surface-variant)]"
+      <div className="flex items-end justify-between mt-auto pt-2">
+        <div className="flex flex-col gap-2">
+          <div className="flex items-center gap-2 text-[var(--m3-on-surface-variant)]">
+            <div className={cn(
+              "p-2 rounded-lg bg-[var(--m3-surface-variant)]/40",
+              isOverdue && "bg-red-100 dark:bg-red-900/30 text-red-600 dark:text-red-400"
             )}>
-              {isOverdue ? t.overdue : `${t.daysLeft} ${daysLeft}${t.days}`}
-            </span>
+              <Calendar className="w-4 h-4" />
+            </div>
+            <div className="flex flex-col">
+              <span className="text-[12px] font-bold">
+                {format(submission.deadline, 'MM/dd' + (submission.deadline.getHours() === 23 && submission.deadline.getMinutes() === 59 ? '' : ' HH:mm'))}
+              </span>
+              <span className={cn(
+                "text-[10px] font-bold",
+                isOverdue ? "text-red-600 dark:text-red-400" : "text-[var(--m3-on-surface-variant)] opacity-70"
+              )}>
+                {isOverdue ? t.overdue : `${t.daysLeft} ${daysLeft}${t.days}`}
+              </span>
+            </div>
           </div>
           {submission.taskType === 'pages' && (
-            <div className="flex items-center gap-1.5 text-[var(--m3-on-surface-variant)] mt-0.5">
-              <BookOpen className="w-3 h-3" />
-              <span className="text-[11px] font-medium leading-none">
-                {submission.currentPage}/{submission.endPage}p
+            <div className="flex items-center gap-2 text-[var(--m3-on-surface-variant)] mt-1">
+              <BookOpen className="w-4 h-4 opacity-70" />
+              <span className="text-[11px] font-bold tabular-nums">
+                {submission.currentPage} <span className="opacity-40">/</span> {submission.endPage}p
               </span>
             </div>
           )}
         </div>
         
-        <div className="flex flex-col items-end gap-1.5 w-1/2">
-           <div className="flex justify-between w-full">
-              <span className="text-[10px] font-bold text-[var(--m3-primary)]">{submission.progress}%</span>
+        <div className="flex flex-col items-end gap-2 w-6/12 max-w-[140px]">
+           <div className="flex justify-between w-full px-0.5">
+              <span className="text-[12px] font-black tabular-nums text-[var(--m3-primary)] leading-none">{submission.progress}%</span>
            </div>
-           <div className="h-2 w-full bg-[var(--m3-surface-variant)] rounded-full overflow-hidden">
+           <div className="h-2 w-full bg-[var(--m3-surface-variant)]/50 rounded-full overflow-hidden shadow-inner p-[1px]">
               <motion.div 
                 initial={{ width: 0 }}
                 animate={{ width: `${submission.progress}%` }}
-                transition={{ duration: 0.8, ease: "easeOut" }}
+                transition={{ duration: 0.8, ease: [0.16, 1, 0.3, 1] }}
                 className={cn(
-                  "h-full rounded-full transition-all duration-500",
-                  daysLeft <= 0 ? "bg-[var(--m3-error)]" : "bg-[var(--m3-primary)]"
+                  "h-full rounded-full transition-all duration-500 shadow-sm",
+                  daysLeft <= 0 ? "bg-red-500" : "bg-[var(--m3-primary)]"
                 )}
               />
            </div>
