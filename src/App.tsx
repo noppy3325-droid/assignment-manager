@@ -606,7 +606,8 @@ export default function App() {
     const subject = formData.get('subject') as string;
     const description = formData.get('description') as string;
     const priority = formData.get('priority') as 'low' | 'medium' | 'high';
-    const progress = parseInt(formData.get('progress') as string) || 0;
+    const progressValue = formData.get('progress');
+    const progress = progressValue !== null ? (parseInt(progressValue as string) || 0) : editData.progress;
     const dateValue = formData.get('deadlineDate') as string;
     const timeValue = formData.get('deadlineTime') as string || "23:59";
 
