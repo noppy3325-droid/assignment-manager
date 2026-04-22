@@ -60,11 +60,11 @@
 
 @layer base {
   body {
-    @apply bg-[var(--m3-surface)] text-[var(--m3-on-surface)] transition-colors duration-500;
+    @apply bg-[var(--m3-surface)] text-[var(--m3-on-surface)] transition-colors duration-500 select-none;
   }
   
   input[type="text"], input[type="number"], input[type="date"], input[type="time"], textarea {
-    @apply transition-all duration-300 placeholder-[var(--m3-on-surface-variant)]/50;
+    @apply transition-all duration-300 placeholder-[var(--m3-on-surface-variant)]/50 select-text;
   }
   input:focus, textarea:focus {
     @apply bg-[var(--m3-surface-container-high)] border-[var(--m3-primary)]/40 ring-4 ring-[var(--m3-primary)]/10 shadow-sm outline-none;
