@@ -211,7 +211,7 @@ export default function App() {
     localStorage.setItem('app-subjects', JSON.stringify(subjects));
   }, [subjects]);
 
-  // Apply theme to body
+  // Apply theme to body and update favicons
   useEffect(() => {
     if (theme === 'dark') {
       document.body.classList.add('dark');
@@ -219,6 +219,21 @@ export default function App() {
       document.body.classList.remove('dark');
     }
     localStorage.setItem('app-theme', theme);
+
+    // Dynamic Favicon Update
+    const darkFavicon = "/Gemini_Generated_Image_pm2flopm2flopm2f.png";
+    const lightFavicon = "/Gemini_Generated_Image_gcsdh4gcsdh4gcsd.png";
+    
+    // Select all favicon links
+    const links = document.querySelectorAll("link[rel*='icon']");
+    links.forEach(link => {
+      const linkEl = link as HTMLLinkElement;
+      if (theme === 'dark') {
+        linkEl.href = darkFavicon;
+      } else {
+        linkEl.href = lightFavicon;
+      }
+    });
   }, [theme]);
 
   useEffect(() => {
@@ -1398,7 +1413,7 @@ export default function App() {
           setAddTaskType('percentage');
           setIsAdding(true);
         }}
-        className="fixed bottom-6 right-6 sm:bottom-10 sm:right-10 w-14 h-14 sm:w-20 sm:h-20 m3-fab z-40"
+        className="fixed bottom-6 right-6 sm:bottom-10 sm:right-10 w-14 h-14 sm:w-20 sm:h-20 bg-[#cdddf7] text-[#005696] rounded-full shadow-lg shadow-[#cdddf7]/50 flex items-center justify-center z-40 group hover:opacity-90 transition-all active:scale-95"
       >
         <Plus className="w-8 h-8 sm:w-10 sm:h-10 transition-transform duration-300 group-hover:rotate-90" />
       </motion.button>
