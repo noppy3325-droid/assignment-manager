@@ -79,6 +79,8 @@ export const translations = {
     invalidProgressInput: "1〜100の間で入力してください",
     allSubjects: "すべて",
     filterBySubject: "教科で絞り込み",
+    license: "ライセンス",
+    license_desc: "このアプリはMITライセンスのもとで公開されています。",
   },
   en: {
     appName: "Study Tracker",
@@ -160,6 +162,8 @@ export const translations = {
     invalidProgressInput: "Input must be between 1 and 100",
     allSubjects: "All",
     filterBySubject: "Filter by subject",
+    license: "License",
+    license_desc: "This app is released under the MIT License.",
   }
 };
 

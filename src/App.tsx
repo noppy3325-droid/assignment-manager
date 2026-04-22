@@ -106,8 +106,11 @@ const DEFAULT_SUBJECTS = [
   "世界史", "日本史", "地理", "現代社会", "倫理", "政治・経済", "情報", "その他"
 ];
 
+const APP_VERSION = '1.1.0';
+
 export default function App() {
   const [user, setUser] = useState<User | null>(null);
+  const [showUpdateModal, setShowUpdateModal] = useState(false);
   const [isAuthReady, setIsAuthReady] = useState(false);
   const [submissions, setSubmissions] = useState<Submission[]>([]);
   const [selectedId, setSelectedId] = useState<string | null>(null);
@@ -155,6 +158,19 @@ export default function App() {
   };
 
   const t = translations[language];
+
+  // Update Notification Logic
+  useEffect(() => {
+    const savedVersion = localStorage.getItem('app-version');
+    if (savedVersion !== APP_VERSION) {
+      setShowUpdateModal(true);
+    }
+  }, []);
+
+  const closeUpdateModal = () => {
+    localStorage.setItem('app-version', APP_VERSION);
+    setShowUpdateModal(false);
+  };
 
   // Logic to load settings from Firestore upon login
   useEffect(() => {
@@ -793,6 +809,88 @@ export default function App() {
 
   return (
     <div className="relative min-h-screen w-full overflow-hidden bg-[var(--m3-surface)] text-[var(--m3-on-surface)]">
+      {/* Update Notification Modal */}
+      <AnimatePresence>
+        {showUpdateModal && (
+          <motion.div 
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 z-[200] flex items-center justify-center p-4 sm:p-6 bg-black/40 backdrop-blur-md"
+          >
+            <motion.div 
+              initial={{ scale: 0.9, opacity: 0, y: 20 }}
+              animate={{ scale: 1, opacity: 1, y: 0 }}
+              exit={{ scale: 0.9, opacity: 0, y: 20 }}
+              className="m3-card !bg-[var(--m3-surface-container-high)] w-full max-w-md p-8 shadow-2xl relative overflow-hidden"
+            >
+              <div className="absolute top-0 right-0 p-8 opacity-5">
+                <Zap className="w-32 h-32 text-[var(--m3-primary)]" />
+              </div>
+              <div className="relative space-y-6 text-left">
+                <div className="flex items-center gap-4">
+                  <div className="w-12 h-12 rounded-2xl bg-[var(--m3-primary)]/10 flex items-center justify-center">
+                    <Zap className="w-6 h-6 text-[var(--m3-primary)]" />
+                  </div>
+                  <div>
+                    <h2 className="text-xl font-black text-[var(--m3-on-surface)]">
+                      {language === 'ja' ? 'アップデートのお知らせ' : 'Update Notice'}
+                    </h2>
+                    <div className="text-[10px] font-black text-[var(--m3-primary)] uppercase tracking-widest">Version {APP_VERSION}</div>
+                  </div>
+                </div>
+
+                <div className="space-y-4 py-2">
+                  <h3 className="text-sm font-black text-[var(--m3-on-surface-variant)] uppercase tracking-wider px-1">
+                    {language === 'ja' ? '主な変更点' : 'Latest Changes'}
+                  </h3>
+                  <ul className="space-y-3">
+                    {[
+                      { 
+                        ja: 'タスク編集時の進捗リセット不具合を修正', 
+                        en: 'Fixed progress reset bug in task editing' 
+                      },
+                      { 
+                        ja: 'タスク追加ボタンのデザインを刷新', 
+                        en: 'New design for the Add Task button' 
+                      },
+                      { 
+                        ja: 'ファビコン表示の不具合を修正', 
+                        en: 'Fixed favicon display reliability' 
+                      },
+                      { 
+                        ja: 'タイマー機能と同期の安定性向上', 
+                        en: 'Better timer and sync stability' 
+                      }
+                    ].map((item, idx) => (
+                      <motion.li 
+                        key={idx}
+                        initial={{ x: -10, opacity: 0 }}
+                        animate={{ x: 0, opacity: 1 }}
+                        transition={{ delay: 0.1 * idx }}
+                        className="flex items-start gap-3"
+                      >
+                        <div className="mt-1.5 w-1.5 h-1.5 rounded-full bg-[var(--m3-primary)] shrink-0" />
+                        <span className="text-sm font-bold text-[var(--m3-on-surface)] leading-relaxed">
+                          {language === 'ja' ? item.ja : item.en}
+                        </span>
+                      </motion.li>
+                    ))}
+                  </ul>
+                </div>
+
+                <button 
+                  onClick={closeUpdateModal}
+                  className="w-full m3-button-primary mt-4"
+                >
+                  {language === 'ja' ? '確認しました' : 'Got it!'}
+                </button>
+              </div>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
       <div className="max-w-[1440px] mx-auto h-screen flex flex-col p-3 sm:p-5 lg:p-6">
         {/* Header */}
         <header className="flex items-center justify-between mb-6 sm:mb-8">
@@ -1231,6 +1329,17 @@ export default function App() {
                 >
                   {t.addSubject}
                 </button>
+              </div>
+            </div>
+
+            <div className="pt-6 border-t border-[var(--m3-outline)]/10 text-center">
+              <div className="text-[10px] font-black text-[var(--m3-on-surface-variant)] uppercase tracking-[0.2em] mb-2">{t.license}</div>
+              <p className="text-[10px] text-[var(--m3-on-surface-variant)]/60 font-medium leading-relaxed">
+                {t.license_desc}<br />
+                © 2026 Lumina Project
+              </p>
+              <div className="mt-4 text-[9px] font-mono text-[var(--m3-on-surface-variant)]/30">
+                Version {APP_VERSION}
               </div>
             </div>
           </div>
