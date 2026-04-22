@@ -126,6 +126,14 @@
   .m3-card {
     @apply bg-[var(--m3-surface-container)] rounded-[28px] p-6 shadow-sm border border-white/5 dark:border-white/5;
   }
+
+  .no-scrollbar::-webkit-scrollbar {
+    display: none;
+  }
+  .no-scrollbar {
+    -ms-overflow-style: none;
+    scrollbar-width: none;
+  }
 }
 
 ::-webkit-scrollbar {

@@ -118,6 +118,7 @@ export default function App() {
   const [isCalendarOpen, setIsCalendarOpen] = useState(false);
   const [addTaskType, setAddTaskType] = useState<'pages' | 'percentage'>('percentage');
   const [activeTab, setActiveTab] = useState<'active' | 'history'>('active');
+  const [subjectFilter, setSubjectFilter] = useState<string | null>(null);
   
   // Theme and Language state
   const [language, setLanguage] = useState<Language>(() => {
@@ -718,10 +719,16 @@ export default function App() {
     const groups: { [key: string]: Submission[] } = {};
     const filtered = submissions.filter(s => {
       // Archive tab: show both completed and soft-deleted tasks
-      if (activeTab === 'history') return s.status === 'completed' || s.isDeleted;
+      if (activeTab === 'history') {
+        const isMatch = s.status === 'completed' || s.isDeleted;
+        if (!isMatch) return false;
+        return subjectFilter ? s.subject === subjectFilter : true;
+      }
       
       // Active tab: only show non-completed, non-deleted
-      return !s.isDeleted && s.status !== 'completed';
+      const isActive = !s.isDeleted && s.status !== 'completed';
+      if (!isActive) return false;
+      return subjectFilter ? s.subject === subjectFilter : true;
     });
     
     filtered.forEach(s => {
@@ -729,7 +736,7 @@ export default function App() {
       groups[s.subject].push(s);
     });
     return groups;
-  }, [submissions, activeTab]);
+  }, [submissions, activeTab, subjectFilter]);
 
   const selectedSubmission = submissions.find(s => s.id === selectedId);
 
@@ -840,7 +847,10 @@ export default function App() {
               className="segmented-control w-full min-w-[280px] lg:min-w-0"
             >
               <button 
-                onClick={() => setActiveTab('active')}
+                onClick={() => {
+                  setActiveTab('active');
+                  setSubjectFilter(null);
+                }}
                 className={cn(
                   "segmented-item",
                   activeTab === 'active' ? "segmented-item-active" : "segmented-item-inactive"
@@ -850,7 +860,10 @@ export default function App() {
                 {t.active}
               </button>
               <button 
-                onClick={() => setActiveTab('history')}
+                onClick={() => {
+                  setActiveTab('history');
+                  setSubjectFilter(null);
+                }}
                 className={cn(
                   "segmented-item",
                   activeTab === 'history' ? "segmented-item-active" : "segmented-item-inactive"
@@ -928,6 +941,43 @@ export default function App() {
 
           {/* Main Content */}
       <main className="flex-1 overflow-y-auto pb-24 lg:pb-20 lg:pr-2">
+        {/* Subject Filter Bar */}
+        <div className="mb-6 overflow-x-auto no-scrollbar py-1">
+          <div className="flex gap-2 min-w-max px-2">
+            <button
+              onClick={() => setSubjectFilter(null)}
+              className={cn(
+                "px-5 py-2.5 rounded-2xl text-xs font-black uppercase tracking-widest transition-all active:scale-95",
+                subjectFilter === null 
+                  ? "bg-[var(--m3-primary)] text-[var(--m3-on-primary)] shadow-md" 
+                  : "bg-[var(--m3-surface-container-high)] text-[var(--m3-on-surface-variant)] border border-[var(--m3-outline)]/10 hover:bg-[var(--m3-surface-container-highest)]"
+              )}
+            >
+              {t.allSubjects}
+            </button>
+            {subjects
+              .filter(subject => submissions.some(s => 
+                s.subject === subject && 
+                (activeTab === 'history' ? (s.status === 'completed' || s.isDeleted) : (!s.isDeleted && s.status !== 'completed'))
+              ))
+              .map(subject => (
+                <button
+                  key={subject}
+                  onClick={() => setSubjectFilter(subjectFilter === subject ? null : subject)}
+                  className={cn(
+                    "px-5 py-2.5 rounded-2xl text-xs font-black uppercase tracking-widest transition-all active:scale-95",
+                    subjectFilter === subject 
+                      ? "bg-[var(--m3-primary)] text-[var(--m3-on-primary)] shadow-md" 
+                      : "bg-[var(--m3-surface-container-high)] text-[var(--m3-on-surface-variant)] border border-[var(--m3-outline)]/10 hover:bg-[var(--m3-surface-container-highest)]"
+                  )}
+                >
+                  {subject}
+                </button>
+              ))
+            }
+          </div>
+        </div>
+
         <LayoutGroup>
           <motion.div 
             layout 

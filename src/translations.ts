@@ -77,6 +77,8 @@ export const translations = {
     descriptionPlaceholder: "詳細情報入力...",
     toggleDigitalTimer: "デジタル時計を表示",
     invalidProgressInput: "1〜100の間で入力してください",
+    allSubjects: "すべて",
+    filterBySubject: "教科で絞り込み",
   },
   en: {
     appName: "Study Tracker",
@@ -156,6 +158,8 @@ export const translations = {
     descriptionPlaceholder: "Enter description...",
     toggleDigitalTimer: "Show Digital Clock",
     invalidProgressInput: "Input must be between 1 and 100",
+    allSubjects: "All",
+    filterBySubject: "Filter by subject",
   }
 };
 
