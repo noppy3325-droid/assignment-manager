@@ -211,7 +211,7 @@ export default function App() {
     localStorage.setItem('app-subjects', JSON.stringify(subjects));
   }, [subjects]);
 
-  // Apply theme to body and update favicons
+  // Apply theme to body
   useEffect(() => {
     if (theme === 'dark') {
       document.body.classList.add('dark');
@@ -219,21 +219,6 @@ export default function App() {
       document.body.classList.remove('dark');
     }
     localStorage.setItem('app-theme', theme);
-
-    // Dynamic Favicon Update
-    const darkFavicon = "/Gemini_Generated_Image_pm2flopm2flopm2f.png";
-    const lightFavicon = "/Gemini_Generated_Image_gcsdh4gcsdh4gcsd.png";
-    
-    // Select all favicon links
-    const links = document.querySelectorAll("link[rel*='icon']");
-    links.forEach(link => {
-      const linkEl = link as HTMLLinkElement;
-      if (theme === 'dark') {
-        linkEl.href = darkFavicon;
-      } else {
-        linkEl.href = lightFavicon;
-      }
-    });
   }, [theme]);
 
   useEffect(() => {
