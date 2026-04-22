@@ -84,6 +84,8 @@ export const translations = {
     feedback: "ご意見・ご要望",
     feedback_desc: "アプリの改善にご協力ください",
     send_feedback: "意見箱を開く",
+    syncing: "同期中...",
+    synced: "クラウドと同期済み",
   },
   en: {
     appName: "Study Tracker",
@@ -170,6 +172,8 @@ export const translations = {
     feedback: "Feedback",
     feedback_desc: "Help us improve the app",
     send_feedback: "Open Feedback Box",
+    syncing: "Syncing...",
+    synced: "Settings synced",
   }
 };
 

@@ -143,6 +143,22 @@ export default function App() {
   const [toastMessage, setToastMessage] = useState<string | null>(null);
   const [isFocusSelectorOpen, setIsFocusSelectorOpen] = useState(false);
   const [deadlineTime, setDeadlineTime] = useState("23:59");
+
+  // Timer states
+  const [activeTimerId, setActiveTimerId] = useState<string | null>(null);
+  const [timerSeconds, setTimerSeconds] = useState(0);
+  const [isTimerRunning, setIsTimerRunning] = useState(false);
+  const [isTimerPaused, setIsTimerPaused] = useState(false);
+  const [showProgressInput, setShowProgressInput] = useState(false);
+  const [progressInputValue, setProgressInputValue] = useState("");
+  
+  // Pomodoro states
+  const [timerMode, setTimerMode] = useState<'stopwatch' | 'pomodoro'>('stopwatch');
+  const [pomodoroPhase, setPomodoroPhase] = useState<'work' | 'break'>('work');
+  const [pomodoroSessionCount, setPomodoroSessionCount] = useState(0);
+  const [pomodoroDurations, setPomodoroDurations] = useState({ work: 25 * 60, break: 5 * 60 });
+  const [showDigitalTimer, setShowDigitalTimer] = useState(true);
+
   const [confirmDialog, setConfirmDialog] = useState<{
     title: string;
     message: string;
@@ -180,12 +196,14 @@ export default function App() {
     const unsub = onSnapshot(doc(db, 'users', user.uid), (docSnap) => {
       if (docSnap.exists()) {
         const data = docSnap.data();
+        
+        // Only update if different and not currently syncing local changes
         if (data.theme && data.theme !== theme) setTheme(data.theme);
         if (data.language && data.language !== language) setLanguage(data.language);
         if (data.subjects && JSON.stringify(data.subjects) !== JSON.stringify(subjects)) {
           setSubjects(data.subjects);
         }
-        if (data.pomodoroDurations) {
+        if (data.pomodoroDurations && JSON.stringify(data.pomodoroDurations) !== JSON.stringify(pomodoroDurations)) {
           setPomodoroDurations(data.pomodoroDurations);
         }
       } else {
@@ -206,22 +224,24 @@ export default function App() {
   useEffect(() => {
     if (!user) return;
     
+    setIsSyncing(true);
     const timeout = setTimeout(async () => {
       try {
-        // We use setDoc with merge:true to ensure it exists
         await setDoc(doc(db, 'users', user.uid), {
           theme,
           language,
           subjects,
           pomodoroDurations
         }, { merge: true });
+        setIsSyncing(false);
       } catch (e) {
         console.warn("Failed to sync settings to cloud", e);
+        setIsSyncing(false);
       }
-    }, 1000);
+    }, 1500); // 1.5s debounce
 
     return () => clearTimeout(timeout);
-  }, [theme, language, subjects, user]);
+  }, [theme, language, subjects, pomodoroDurations, user]);
 
   useEffect(() => {
     localStorage.setItem('app-subjects', JSON.stringify(subjects));
@@ -242,10 +262,17 @@ export default function App() {
   }, [language]);
 
   const overallProgress = useMemo(() => {
-    const mainSubmissions = submissions.filter(s => !s.isDeleted && s.status === 'completed');
-    const totalActive = submissions.filter(s => !s.isDeleted).length;
-    if (totalActive === 0) return 0;
-    return Math.round((mainSubmissions.length / totalActive) * 100);
+    // Only current active tasks (exclude deleted and already completed)
+    const activeTasks = submissions.filter(s => !s.isDeleted && s.status !== 'completed');
+    
+    if (activeTasks.length === 0) {
+      // Check if there are any completed tasks (not deleted)
+      const hasCompleted = submissions.some(s => !s.isDeleted && s.status === 'completed');
+      return hasCompleted ? 100 : 0;
+    }
+    
+    const totalProgress = activeTasks.reduce((sum, s) => sum + (s.progress || 0), 0);
+    return Math.round(totalProgress / activeTasks.length);
   }, [submissions]);
 
   const nearestDeadlinesCount = useMemo(() => {
@@ -255,21 +282,6 @@ export default function App() {
       differenceInDays(s.deadline, new Date()) <= 2
     ).length;
   }, [submissions]);
-
-  // Timer states
-  const [activeTimerId, setActiveTimerId] = useState<string | null>(null);
-  const [timerSeconds, setTimerSeconds] = useState(0);
-  const [isTimerRunning, setIsTimerRunning] = useState(false);
-  const [isTimerPaused, setIsTimerPaused] = useState(false);
-  const [showProgressInput, setShowProgressInput] = useState(false);
-  const [progressInputValue, setProgressInputValue] = useState("");
-  
-  // Pomodoro states
-  const [timerMode, setTimerMode] = useState<'stopwatch' | 'pomodoro'>('stopwatch');
-  const [pomodoroPhase, setPomodoroPhase] = useState<'work' | 'break'>('work');
-  const [pomodoroSessionCount, setPomodoroSessionCount] = useState(0);
-  const [pomodoroDurations, setPomodoroDurations] = useState({ work: 25 * 60, break: 5 * 60 });
-  const [showDigitalTimer, setShowDigitalTimer] = useState(true);
 
   const previewProgress = useMemo(() => {
     if (!activeTimerId || !progressInputValue) return null;
@@ -1213,7 +1225,28 @@ export default function App() {
           <button onClick={() => setIsSettingsOpen(false)} className="absolute top-4 right-4 p-2 rounded-full hover:bg-[var(--m3-surface-container)]">
              <X className="w-5 h-5 text-[var(--m3-on-surface-variant)]" />
           </button>
-          <h2 className="text-2xl font-bold mb-8">{t.settings}</h2>
+          <div className="flex justify-between items-center mb-8">
+            <h2 className="text-2xl font-bold">{t.settings}</h2>
+            {user && (
+              <div className="flex items-center gap-2 px-3 py-1.5 rounded-full bg-[var(--m3-surface-container-high)] text-[10px] font-black uppercase tracking-widest text-[var(--m3-primary)] animate-in fade-in slide-in-from-right-4 duration-500">
+                {isSyncing ? (
+                  <>
+                    <motion.div 
+                      animate={{ rotate: 360 }}
+                      transition={{ duration: 1, repeat: Infinity, ease: "linear" }}
+                      className="w-3 h-3 border-2 border-[var(--m3-primary)] border-t-transparent rounded-full"
+                    />
+                    {t.syncing}
+                  </>
+                ) : (
+                  <>
+                    <CheckCircle2 className="w-3 h-3" />
+                    {t.synced}
+                  </>
+                )}
+              </div>
+            )}
+          </div>
           
           <div className="space-y-6 flex-1">
             <div className="space-y-3">
