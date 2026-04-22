@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, useRef, useCallback } from 'react';
 import { motion, AnimatePresence, LayoutGroup } from 'motion/react';
 import { Plus, Calendar, BookOpen, CheckCircle2, Clock, ChevronRight, X, Settings, LogOut, LogIn, Trash2, Sun, Moon, Zap, Play, Pause, Square, Edit3, Coffee, Brain, Eye, EyeOff, AlertCircle } from 'lucide-react';
 import { format, differenceInDays, isPast, isToday, startOfDay, formatDistanceToNow } from 'date-fns';
@@ -220,6 +220,12 @@ export default function App() {
     return () => unsub();
   }, [user]);
 
+  // Keep track of latest settings to reliably sync on tab close
+  const latestSettings = useRef({ theme, language, subjects, pomodoroDurations });
+  useEffect(() => {
+    latestSettings.current = { theme, language, subjects, pomodoroDurations };
+  }, [theme, language, subjects, pomodoroDurations]);
+
   // Sync state changes to Firestore (Debounced to avoid excessive writes)
   useEffect(() => {
     if (!user) return;
@@ -228,20 +234,42 @@ export default function App() {
     const timeout = setTimeout(async () => {
       try {
         await setDoc(doc(db, 'users', user.uid), {
-          theme,
-          language,
-          subjects,
-          pomodoroDurations
+          ...latestSettings.current
         }, { merge: true });
         setIsSyncing(false);
       } catch (e) {
         console.warn("Failed to sync settings to cloud", e);
         setIsSyncing(false);
       }
-    }, 1500); // 1.5s debounce
+    }, 30000); // 30s debounce to reduce write frequency
 
     return () => clearTimeout(timeout);
   }, [theme, language, subjects, pomodoroDurations, user]);
+
+  // Emergency sync on tab close or page hide
+  useEffect(() => {
+    if (!user) return;
+
+    const performSync = () => {
+      setDoc(doc(db, 'users', user.uid), {
+        ...latestSettings.current
+      }, { merge: true }).catch(console.warn);
+    };
+
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === 'hidden') {
+        performSync();
+      }
+    };
+
+    window.addEventListener('beforeunload', performSync);
+    document.addEventListener('visibilitychange', handleVisibilityChange);
+
+    return () => {
+      window.removeEventListener('beforeunload', performSync);
+      document.removeEventListener('visibilitychange', handleVisibilityChange);
+    };
+  }, [user]);
 
   useEffect(() => {
     localStorage.setItem('app-subjects', JSON.stringify(subjects));
@@ -1222,25 +1250,25 @@ export default function App() {
           transition={{ duration: 0.25, ease: "easeOut" }}
           className="m3-card relative w-full max-w-sm max-h-[90vh] overflow-y-auto"
         >
-          <button onClick={() => setIsSettingsOpen(false)} className="absolute top-4 right-4 p-2 rounded-full hover:bg-[var(--m3-surface-container)]">
+          <button onClick={() => setIsSettingsOpen(false)} className="absolute top-4 right-4 p-2 rounded-full hover:bg-[var(--m3-surface-container)] z-10">
              <X className="w-5 h-5 text-[var(--m3-on-surface-variant)]" />
           </button>
-          <div className="flex justify-between items-center mb-8">
+          <div className="mb-8">
             <h2 className="text-2xl font-bold">{t.settings}</h2>
             {user && (
-              <div className="flex items-center gap-2 px-3 py-1.5 rounded-full bg-[var(--m3-surface-container-high)] text-[10px] font-black uppercase tracking-widest text-[var(--m3-primary)] animate-in fade-in slide-in-from-right-4 duration-500">
+              <div className="mt-3 inline-flex items-center gap-2 px-3 py-1.5 rounded-full bg-[var(--m3-surface-container-high)] text-[9px] font-black uppercase tracking-widest text-[var(--m3-primary)] animate-in fade-in slide-in-from-top-1 duration-500">
                 {isSyncing ? (
                   <>
                     <motion.div 
                       animate={{ rotate: 360 }}
                       transition={{ duration: 1, repeat: Infinity, ease: "linear" }}
-                      className="w-3 h-3 border-2 border-[var(--m3-primary)] border-t-transparent rounded-full"
+                      className="w-2.5 h-2.5 border-2 border-[var(--m3-primary)] border-t-transparent rounded-full"
                     />
                     {t.syncing}
                   </>
                 ) : (
                   <>
-                    <CheckCircle2 className="w-3 h-3" />
+                    <CheckCircle2 className="w-2.5 h-2.5" />
                     {t.synced}
                   </>
                 )}
