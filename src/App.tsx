@@ -313,7 +313,7 @@ export default function App() {
           if (!sessionStorage.getItem(storageKey)) {
             new Notification("締切間近の課題があります", {
               body: `${s.subject}: ${s.title} の締切まであと1時間以内です！`,
-              icon: "/favicon.ico"
+              icon: "/Gemini_Generated_Image_pm2flopm2flopm2f.png"
             });
             sessionStorage.setItem(storageKey, "true");
           }
@@ -413,7 +413,7 @@ export default function App() {
       
       new Notification(t.workPhase + " " + (language === 'ja' ? '終了！' : 'Finished!'), {
         body: t.breakPhase + (language === 'ja' ? 'を始めましょう。' : ' starting now.'),
-        icon: "/favicon.ico"
+        icon: "/Gemini_Generated_Image_pm2flopm2flopm2f.png"
       });
       
       // Auto-start break? or wait for user?
@@ -424,7 +424,7 @@ export default function App() {
       
       new Notification(t.breakPhase + " " + (language === 'ja' ? '終了！' : 'Finished!'), {
         body: t.workPhase + (language === 'ja' ? 'を再開しましょう。' : ' starting now.'),
-        icon: "/favicon.ico"
+        icon: "/Gemini_Generated_Image_pm2flopm2flopm2f.png"
       });
     }
 
@@ -1330,6 +1330,22 @@ export default function App() {
                   {t.addSubject}
                 </button>
               </div>
+            </div>
+
+            <div className="pt-6 border-t border-[var(--m3-outline)]/10 text-center">
+              <div className="text-[10px] font-black text-[var(--m3-on-surface-variant)] uppercase tracking-[0.2em] mb-2">{t.feedback}</div>
+              <p className="text-[10px] text-[var(--m3-on-surface-variant)]/60 font-medium mb-4">
+                {t.feedback_desc}
+              </p>
+              <a 
+                href="https://docs.google.com/forms/d/e/1FAIpQLSdEbdto4RIERpgNP0MUlLceT1nSEL907bOIo3CNt2XMiLi51w/viewform?usp=publish-editor"
+                target="_blank"
+                rel="noopener noreferrer"
+                className="inline-flex items-center gap-2 px-6 py-3 rounded-2xl bg-[var(--m3-primary-container)] text-[var(--m3-on-primary-container)] text-[10px] font-black uppercase tracking-widest hover:scale-105 active:scale-95 transition-all shadow-md group"
+              >
+                <Zap className="w-3 h-3 text-[var(--m3-primary)] group-hover:rotate-12 transition-transform" />
+                {t.send_feedback}
+              </a>
             </div>
 
             <div className="pt-6 border-t border-[var(--m3-outline)]/10 text-center">

@@ -81,6 +81,9 @@ export const translations = {
     filterBySubject: "教科で絞り込み",
     license: "ライセンス",
     license_desc: "このアプリはMITライセンスのもとで公開されています。",
+    feedback: "ご意見・ご要望",
+    feedback_desc: "アプリの改善にご協力ください",
+    send_feedback: "意見箱を開く",
   },
   en: {
     appName: "Study Tracker",
@@ -164,6 +167,9 @@ export const translations = {
     filterBySubject: "Filter by subject",
     license: "License",
     license_desc: "This app is released under the MIT License.",
+    feedback: "Feedback",
+    feedback_desc: "Help us improve the app",
+    send_feedback: "Open Feedback Box",
   }
 };
 
