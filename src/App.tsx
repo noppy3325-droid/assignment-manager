@@ -139,7 +139,6 @@ export default function App() {
     return saved ? JSON.parse(saved) : DEFAULT_SUBJECTS;
   });
   const [newSubject, setNewSubject] = useState("");
-  const [isSyncing, setIsSyncing] = useState(false);
   const [toastMessage, setToastMessage] = useState<string | null>(null);
   const [isFocusSelectorOpen, setIsFocusSelectorOpen] = useState(false);
   const [deadlineTime, setDeadlineTime] = useState("23:59");
@@ -230,16 +229,13 @@ export default function App() {
   useEffect(() => {
     if (!user) return;
     
-    setIsSyncing(true);
     const timeout = setTimeout(async () => {
       try {
         await setDoc(doc(db, 'users', user.uid), {
           ...latestSettings.current
         }, { merge: true });
-        setIsSyncing(false);
       } catch (e) {
         console.warn("Failed to sync settings to cloud", e);
-        setIsSyncing(false);
       }
     }, 30000); // 30s debounce to reduce write frequency
 
@@ -1253,28 +1249,7 @@ export default function App() {
           <button onClick={() => setIsSettingsOpen(false)} className="absolute top-4 right-4 p-2 rounded-full hover:bg-[var(--m3-surface-container)] z-10">
              <X className="w-5 h-5 text-[var(--m3-on-surface-variant)]" />
           </button>
-          <div className="mb-8">
-            <h2 className="text-2xl font-bold">{t.settings}</h2>
-            {user && (
-              <div className="mt-3 inline-flex items-center gap-2 px-3 py-1.5 rounded-full bg-[var(--m3-surface-container-high)] text-[9px] font-black uppercase tracking-widest text-[var(--m3-primary)] animate-in fade-in slide-in-from-top-1 duration-500">
-                {isSyncing ? (
-                  <>
-                    <motion.div 
-                      animate={{ rotate: 360 }}
-                      transition={{ duration: 1, repeat: Infinity, ease: "linear" }}
-                      className="w-2.5 h-2.5 border-2 border-[var(--m3-primary)] border-t-transparent rounded-full"
-                    />
-                    {t.syncing}
-                  </>
-                ) : (
-                  <>
-                    <CheckCircle2 className="w-2.5 h-2.5" />
-                    {t.synced}
-                  </>
-                )}
-              </div>
-            )}
-          </div>
+          <h2 className="text-2xl font-bold mb-8">{t.settings}</h2>
           
           <div className="space-y-6 flex-1">
             <div className="space-y-3">
