@@ -1,11 +1,28 @@
 import React, { useState, useEffect, useMemo, useRef, useCallback } from 'react';
 import { motion, AnimatePresence, LayoutGroup } from 'motion/react';
-import { Plus, Calendar, BookOpen, CheckCircle2, Clock, ChevronRight, X, Settings, LogOut, LogIn, Trash2, Sun, Moon, Zap, Play, Pause, Square, Edit3, Coffee, Brain, Eye, EyeOff, AlertCircle } from 'lucide-react';
+import { Plus, Calendar, BookOpen, CheckCircle2, Clock, ChevronRight, ChevronDown, X, Settings, LogOut, LogIn, Trash2, Sun, Moon, Zap, Play, Pause, Square, CheckSquare, Edit3, Coffee, Brain, Eye, EyeOff, AlertCircle } from 'lucide-react';
 import { format, differenceInDays, isPast, isToday, startOfDay, formatDistanceToNow } from 'date-fns';
 import { ja } from 'date-fns/locale';
 import { DayPicker } from 'react-day-picker';
 import 'react-day-picker/dist/style.css';
 import confetti from 'canvas-confetti';
+import { 
+  DndContext, 
+  closestCenter,
+  KeyboardSensor,
+  PointerSensor,
+  useSensor,
+  useSensors,
+  DragEndEvent
+} from '@dnd-kit/core';
+import {
+  arrayMove,
+  SortableContext,
+  sortableKeyboardCoordinates,
+  verticalListSortingStrategy,
+  useSortable
+} from '@dnd-kit/sortable';
+import { CSS } from '@dnd-kit/utilities';
 import { cn } from './lib/utils';
 import { translations, Language } from './translations';
 
@@ -106,7 +123,43 @@ const DEFAULT_SUBJECTS = [
   "世界史", "日本史", "地理", "現代社会", "倫理", "政治・経済", "情報", "その他"
 ];
 
-const APP_VERSION = '1.1.0';
+const APP_VERSION = '1.2.0';
+
+const TERMS_OF_SERVICE = {
+  title: "🚀 Submission-Manager アプリ概要",
+  intro: "「進捗を可視化し、提出期限を逃さない。」\n\nSubmission-Managerは、日々の課題や提出物を一括管理し、学習効率を最大化するために開発された進捗管理ツールです。",
+  features: {
+    title: "📌 主な機能",
+    items: [
+      "タスク・課題の進捗管理: 0%〜100%のステータスで進行状況をリアルタイムに把握。",
+      "期限通知システム: 残り日数や期限間近のタスクをひと目で確認可能。",
+      "科目・カテゴリー別フィルタ: 整理された表示で、迷わずタスクに着手。"
+    ]
+  },
+  terms: {
+    title: "📝 ご利用規約および免責事項",
+    intro: "本アプリの利用にあたり、以下の内容を必ずご確認ください。",
+    sections: [
+      {
+        title: "1. サービスの継続性について",
+        content: "本アプリは Google Firebase および無料枠のサーバー資源を利用して運用されています。\n\n無料枠の制限やプラットフォームの仕様変更により、予告なくサービスの停止、または一部機能が利用できなくなる可能性があります。あらかじめご了承ください。"
+      },
+      {
+        title: "2. プライバシーと個人情報の取り扱い",
+        content: "個人情報の非保持: 当アプリでは、アカウント情報（氏名・メールアドレス等）や、作成されたタスクの具体的な内容、その他個人を特定できる情報は一切取得・保持いたしません。\n\nデータの匿名性: 入力されたデータはブラウザまたはプラットフォーム上の匿名化された領域で処理されます。"
+      },
+      {
+        title: "3. フィードバックと学術利用",
+        content: "ユーザーの皆様からいただいたフィードバックや、統計的な利用状況データ（個人を特定しない形のもの）は、学術的な発表や研究、開発報告等に使用させていただく場合があります。"
+      },
+      {
+        title: "4. 免責事項",
+        content: "本アプリの使用によって生じた損害（データの消失、期限の失念等）について、開発者は一切の責任を負いかねます。重要なタスクについては、適宜バックアップや併用管理をお勧めいたします。"
+      }
+    ],
+    footer: "ログインすることで、利用規約および免責事項に同意したものとみなされます。"
+  }
+};
 
 export default function App() {
   const [user, setUser] = useState<User | null>(null);
@@ -121,7 +174,36 @@ export default function App() {
   const [isCalendarOpen, setIsCalendarOpen] = useState(false);
   const [addTaskType, setAddTaskType] = useState<'pages' | 'percentage'>('percentage');
   const [activeTab, setActiveTab] = useState<'active' | 'history'>('active');
+  const [isSelectionMode, setIsSelectionMode] = useState(false);
+  const [selectedArchiveIds, setSelectedArchiveIds] = useState<Set<string>>(new Set());
   const [subjectFilter, setSubjectFilter] = useState<string | null>(null);
+  const [modalSubject, setModalSubject] = useState("");
+  const [isSubjectDropdownOpen, setIsSubjectDropdownOpen] = useState(false);
+  const [isTermsAccepted, setIsTermsAccepted] = useState(() => {
+    return localStorage.getItem('app-terms-accepted') === 'true';
+  });
+  const [showTermsModal, setShowTermsModal] = useState(false);
+  const [hasScrolledToBottom, setHasScrolledToBottom] = useState(false);
+  const [tempAccepted, setTempAccepted] = useState(false);
+
+  // Clear selection on tab change
+  useEffect(() => {
+    setSelectedArchiveIds(new Set());
+    setIsSelectionMode(false);
+  }, [activeTab, subjectFilter]);
+
+  // Reset modal subject when adding or editing
+  useEffect(() => {
+    if (isAdding) {
+      setModalSubject("");
+    }
+  }, [isAdding]);
+
+  useEffect(() => {
+    if (isEditing && editData) {
+      setModalSubject(editData.subject);
+    }
+  }, [isEditing, editData]);
   
   // Theme and Language state
   const [language, setLanguage] = useState<Language>(() => {
@@ -142,6 +224,35 @@ export default function App() {
   const [toastMessage, setToastMessage] = useState<string | null>(null);
   const [isFocusSelectorOpen, setIsFocusSelectorOpen] = useState(false);
   const [deadlineTime, setDeadlineTime] = useState("23:59");
+  
+  // Handle subject reordering
+  const sensors = useSensors(
+    useSensor(PointerSensor, {
+      activationConstraint: {
+        distance: 8,
+      },
+    }),
+    useSensor(KeyboardSensor, {
+      coordinateGetter: sortableKeyboardCoordinates,
+    })
+  );
+
+  function handleDragEnd(event: DragEndEvent) {
+    const { active, over } = event;
+    if (over && active.id !== over.id) {
+      setSubjects((items) => {
+        const oldIndex = items.indexOf(active.id as string);
+        const newIndex = items.indexOf(over.id as string);
+        const newItems = arrayMove(items, oldIndex, newIndex);
+        localStorage.setItem('app-subjects', JSON.stringify(newItems));
+        // Sync to cloud if user logged in
+        if (user) {
+          setDoc(doc(db, 'users', user.uid), { subjects: newItems }, { merge: true });
+        }
+        return newItems;
+      });
+    }
+  }
 
   // Timer states
   const [activeTimerId, setActiveTimerId] = useState<string | null>(null);
@@ -816,29 +927,172 @@ export default function App() {
     return (
       <div className="min-h-screen w-full flex flex-col items-center justify-center p-6 bg-[var(--m3-surface)]">
         <motion.div 
-          initial={{ opacity: 0, y: 20 }}
-          animate={{ opacity: 1, y: 0 }}
-          className="max-w-md w-full m3-card text-center shadow-xl"
+          initial={{ opacity: 0, scale: 0.9 }}
+          animate={{ opacity: 1, scale: 1 }}
+          className="max-w-md w-full m3-card text-center shadow-2xl overflow-hidden"
         >
-          <div className="w-20 h-20 bg-[var(--m3-primary-container)] rounded-full flex items-center justify-center mx-auto mb-8 text-[var(--m3-on-primary-container)]">
-            <BookOpen className="w-10 h-10" />
+          <div className="p-10">
+            <div className="w-20 h-20 bg-[var(--m3-primary-container)] rounded-[24px] flex items-center justify-center mx-auto mb-8 text-[var(--m3-on-primary-container)] rotate-3">
+              <BookOpen className="w-10 h-10" />
+            </div>
+            <h1 className="text-3xl font-black text-[var(--m3-on-surface)] mb-4 tracking-tight">{t.appName}</h1>
+            <p className="text-[var(--m3-on-surface-variant)] mb-10 leading-relaxed font-medium">
+              {language === 'ja' ? (
+                <>提出物を美しく管理しましょう。<br />Googleアカウントでログインして開始します。</>
+              ) : (
+                <>Manage your assignments beautifully.<br />Sign in with Google to get started.</>
+              )}
+            </p>
+            
+            <button 
+              onClick={() => {
+                if (isTermsAccepted) {
+                  login();
+                } else {
+                  setShowTermsModal(true);
+                }
+              }}
+              className="w-full m3-button-primary py-6"
+            >
+              <LogIn className="w-5 h-5" />
+              {language === 'ja' ? 'Googleでログイン' : 'Login with Google'}
+            </button>
           </div>
-          <h1 className="text-3xl font-bold text-[var(--m3-on-surface)] mb-4">{t.appName}</h1>
-          <p className="text-[var(--m3-on-surface-variant)] mb-10 leading-relaxed">
-            {language === 'ja' ? (
-              <>提出物を美しく管理しましょう。<br />Googleアカウントでログインして開始します。</>
-            ) : (
-              <>Manage your assignments beautifully.<br />Sign in with Google to get started.</>
-            )}
-          </p>
-          <button 
-            onClick={login}
-            className="w-full m3-button-primary"
-          >
-            <LogIn className="w-5 h-5" />
-            {language === 'ja' ? 'Googleでログイン' : 'Sign in with Google'}
-          </button>
         </motion.div>
+
+        {/* Terms of Service Modal */}
+        <AnimatePresence>
+          {showTermsModal && (
+            <motion.div 
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              className="fixed inset-0 z-[300] flex items-center justify-center p-4 sm:p-6 bg-black/60 backdrop-blur-md"
+            >
+              <motion.div 
+                initial={{ scale: 0.9, opacity: 0, y: 20 }}
+                animate={{ scale: 1, opacity: 1, y: 0 }}
+                exit={{ scale: 0.9, opacity: 0, y: 20 }}
+                className="m3-card !bg-white w-full max-w-2xl max-h-[85vh] flex flex-col shadow-2xl relative overflow-hidden text-slate-900"
+              >
+                <div className="p-4 sm:p-5 border-b border-slate-200 shrink-0 bg-slate-50">
+                  <h2 className="text-lg font-black text-slate-900 flex items-center gap-3">
+                    <CheckSquare className="w-5 h-5 text-[var(--m3-primary)]" />
+                    {language === 'ja' ? '利用規約' : 'Terms of Service'}
+                  </h2>
+                </div>
+
+                <div 
+                  onScroll={(e) => {
+                    const target = e.currentTarget;
+                    if (target.scrollHeight - target.scrollTop <= target.clientHeight + 20) {
+                      setHasScrolledToBottom(true);
+                    }
+                  }}
+                  className="flex-1 overflow-y-auto p-5 sm:p-8 scrollbar-custom space-y-6 text-slate-800"
+                >
+                  <div className="space-y-4">
+                    <h3 className="text-lg font-black text-slate-900">{TERMS_OF_SERVICE.title}</h3>
+                    <p className="text-sm font-semibold leading-relaxed whitespace-pre-wrap text-slate-700">
+                      {TERMS_OF_SERVICE.intro}
+                    </p>
+                  </div>
+
+                  <div className="space-y-4">
+                    <h3 className="text-base font-black flex items-center gap-2 text-slate-900">
+                       {TERMS_OF_SERVICE.features.title}
+                    </h3>
+                    <ul className="space-y-3">
+                      {TERMS_OF_SERVICE.features.items.map((item, idx) => (
+                        <li key={idx} className="flex gap-3 text-sm font-bold text-slate-700">
+                          <div className="mt-1.5 w-1.5 h-1.5 rounded-full bg-[var(--m3-primary)] shrink-0" />
+                          {item}
+                        </li>
+                      ))}
+                    </ul>
+                  </div>
+
+                  <div className="space-y-6 pt-6 border-t border-slate-100">
+                    <h3 className="text-lg font-black text-slate-900">{TERMS_OF_SERVICE.terms.title}</h3>
+                    <p className="text-xs font-bold text-slate-500 italic">{TERMS_OF_SERVICE.terms.intro}</p>
+                    
+                    {TERMS_OF_SERVICE.terms.sections.map((section, idx) => (
+                      <div key={idx} className="space-y-2">
+                        <h4 className="text-sm font-black text-[var(--m3-primary)]">{section.title}</h4>
+                        <p className="text-sm font-semibold leading-relaxed text-slate-700 whitespace-pre-wrap">
+                          {section.content}
+                        </p>
+                      </div>
+                    ))}
+                  </div>
+
+                  <div className="p-4 rounded-2xl bg-slate-50 border border-slate-200">
+                    <p className="text-xs font-black leading-relaxed text-[var(--m3-primary)] text-center">
+                      {TERMS_OF_SERVICE.terms.footer}
+                    </p>
+                  </div>
+                </div>
+
+                <div className="p-4 sm:p-6 bg-slate-50 border-t border-slate-200 space-y-3 shrink-0">
+                  <div className="flex flex-col items-center gap-3">
+                    <button 
+                      disabled={!hasScrolledToBottom}
+                      onClick={() => setTempAccepted(!tempAccepted)}
+                      className={cn(
+                        "flex items-center gap-3 px-4 py-2 rounded-2xl transition-all duration-300",
+                        !hasScrolledToBottom ? "opacity-30 grayscale cursor-not-allowed" : "hover:scale-105 active:scale-95"
+                      )}
+                    >
+                      <div className={cn(
+                        "w-6 h-6 rounded-lg border-2 flex items-center justify-center transition-all",
+                        tempAccepted ? "bg-[var(--m3-primary)] border-[var(--m3-primary)]" : "border-slate-300"
+                      )}>
+                        {tempAccepted && <X className="w-4 h-4 text-white" />}
+                      </div>
+                      <span className="text-sm font-black uppercase tracking-wider text-slate-700">
+                        {language === 'ja' ? '規約に同意する' : 'I agree to the terms'}
+                      </span>
+                    </button>
+
+                    <div className="flex w-full gap-3">
+                      <button 
+                        onClick={() => {
+                          setShowTermsModal(false);
+                          setTempAccepted(false);
+                          setHasScrolledToBottom(false);
+                        }}
+                        className="flex-1 px-6 py-4 rounded-2xl bg-slate-200 text-slate-600 font-black uppercase tracking-widest text-xs hover:bg-slate-300 transition-all"
+                      >
+                        {t.cancel || 'キャンセル'}
+                      </button>
+                      <button 
+                        disabled={!tempAccepted}
+                        onClick={() => {
+                          setIsTermsAccepted(true);
+                          localStorage.setItem('app-terms-accepted', 'true');
+                          setShowTermsModal(false);
+                          login();
+                        }}
+                        className={cn(
+                          "flex-[2] m3-button-primary !py-4",
+                          !tempAccepted && "opacity-30 grayscale cursor-not-allowed"
+                        )}
+                      >
+                        <LogIn className="w-5 h-5" />
+                        {language === 'ja' ? 'Googleでログイン' : 'Login with Google'}
+                      </button>
+                    </div>
+                  </div>
+                  {!hasScrolledToBottom && (
+                    <p className="text-xs font-black text-center text-red-500 uppercase tracking-widest animate-pulse">
+                      {language === 'ja' ? '最後までスクロールして同意してください' : 'Please scroll to the bottom to agree'}
+                    </p>
+                  )}
+                </div>
+              </motion.div>
+            </motion.div>
+          )}
+        </AnimatePresence>
       </div>
     );
   }
@@ -872,7 +1126,7 @@ export default function App() {
                     <h2 className="text-xl font-black text-[var(--m3-on-surface)]">
                       {language === 'ja' ? 'アップデートのお知らせ' : 'Update Notice'}
                     </h2>
-                    <div className="text-[10px] font-black text-[var(--m3-primary)] uppercase tracking-widest">Version {APP_VERSION}</div>
+                    <div className="text-xs font-black text-[var(--m3-primary)] uppercase tracking-widest">Version {APP_VERSION}</div>
                   </div>
                 </div>
 
@@ -883,20 +1137,20 @@ export default function App() {
                   <ul className="space-y-3">
                     {[
                       { 
-                        ja: 'タスク編集時の進捗リセット不具合を修正', 
-                        en: 'Fixed progress reset bug in task editing' 
+                        ja: '12インチHD解像度クロームブック向けに表示サイズを最適化', 
+                        en: 'Optimized display scaling for 12-inch HD Chromebooks' 
                       },
                       { 
-                        ja: 'タスク追加ボタンのデザインを刷新', 
-                        en: 'New design for the Add Task button' 
+                        ja: '視認性向上のため、全体的なフォントサイズを調整', 
+                        en: 'Adjusted global font sizes for better legibility' 
                       },
                       { 
-                        ja: 'ファビコン表示の不具合を修正', 
-                        en: 'Fixed favicon display reliability' 
+                        ja: '利用規約モーダルの表示領域を拡大', 
+                        en: 'Expanded content area in the Terms of Service modal' 
                       },
                       { 
-                        ja: 'タイマー機能と同期の安定性向上', 
-                        en: 'Better timer and sync stability' 
+                        ja: 'ドラッグ＆ドロップによる教科の並び替え機能を改善', 
+                        en: 'Improved subject reordering via drag & drop' 
                       }
                     ].map((item, idx) => (
                       <motion.li 
@@ -936,7 +1190,7 @@ export default function App() {
             transition={{ duration: 0.4, ease: "easeOut" }}
           >
             <h1 className="text-xl sm:text-2xl font-bold tracking-tight">{t.appName}</h1>
-            <p className="text-[10px] sm:text-xs text-[var(--m3-on-surface-variant)] mt-0.5 font-medium">
+            <p className="text-xs text-[var(--m3-on-surface-variant)] mt-0.5 font-medium">
               {format(new Date(), language === 'ja' ? 'M月d日 (EEEE)' : 'MMMM d (EEEE)', { locale: language === 'ja' ? ja : undefined })}
             </p>
           </motion.div>
@@ -1017,7 +1271,7 @@ export default function App() {
               transition={{ duration: 0.4, ease: "easeOut" }}
               className="bg-[var(--m3-primary-container)] rounded-[28px] p-6 w-full min-w-[180px] lg:min-w-0 shadow-sm shrink-0"
             >
-              <div className="text-[10px] text-[var(--m3-on-primary-container)] opacity-70 uppercase tracking-[0.15em] font-black mb-1">{t.progress}</div>
+              <div className="text-xs text-[var(--m3-on-primary-container)] opacity-70 uppercase tracking-[0.15em] font-black mb-1">{t.progress}</div>
               <div className="flex items-baseline gap-1 text-[var(--m3-on-primary-container)]">
                 <span className="text-4xl font-light tracking-tighter">{overallProgress}</span>
                 <span className="text-sm font-bold opacity-70">%</span>
@@ -1038,11 +1292,11 @@ export default function App() {
               transition={{ delay: 0.1, duration: 0.4, ease: "easeOut" }}
               className="bg-[var(--m3-surface-container-high)] rounded-[28px] p-6 w-full min-w-[220px] lg:min-w-0 shadow-sm border border-[var(--m3-outline-variant)]/20 shrink-0"
             >
-              <div className="text-[10px] lg:text-[11px] text-[var(--m3-on-surface-variant)] uppercase tracking-wider font-black mb-2">{t.upcoming}</div>
+              <div className="text-xs text-[var(--m3-on-surface-variant)] uppercase tracking-wider font-black mb-2">{t.upcoming}</div>
               <div className="text-3xl lg:text-4xl font-light tracking-tighter text-[var(--m3-on-surface)]">
                 {nearestDeadlinesCount.toString().padStart(2, '0')}
               </div>
-              <div className="text-[10px] font-bold text-[var(--m3-on-surface-variant)] opacity-60 mt-1">{language === 'ja' ? '今後48時間以内' : 'Within 48 hours'}</div>
+              <div className="text-xs font-bold text-[var(--m3-on-surface-variant)] opacity-60 mt-1">{language === 'ja' ? '今後48時間以内' : 'Within 48 hours'}</div>
             </motion.div>
 
             <motion.div 
@@ -1051,24 +1305,24 @@ export default function App() {
               transition={{ delay: 0.2, duration: 0.4, ease: "easeOut" }}
               className="m3-card w-full min-w-[220px] lg:min-w-0 shadow-none border border-[var(--m3-outline)]/10 hidden sm:flex flex-col shrink-0 mb-8"
             >
-              <div className="text-[10px] lg:text-[11px] text-[var(--m3-on-surface-variant)] uppercase tracking-wider font-bold mb-3">{t.recentActivity}</div>
+              <div className="text-xs text-[var(--m3-on-surface-variant)] uppercase tracking-wider font-bold mb-3">{t.recentActivity}</div>
               <div className="space-y-3">
                 {recentActivities.length > 0 ? (
                   recentActivities.map(log => (
                     <div key={log.id} className="border-l-2 border-[var(--m3-primary)]/30 pl-2.5 py-0.5">
-                      <div className="text-[11px] font-bold text-[var(--m3-on-surface)] line-clamp-1">{log.taskTitle}</div>
+                      <div className="text-xs font-bold text-[var(--m3-on-surface)] line-clamp-1">{log.taskTitle}</div>
                       <div className="flex items-center gap-1.5 mt-0.5">
-                        <span className="text-[9px] text-[var(--m3-on-surface-variant)] font-medium">
+                        <span className="text-xs text-[var(--m3-on-surface-variant)] font-medium">
                           {formatDistanceToNow(log.timestamp.toDate(), { addSuffix: true, locale: language === 'ja' ? ja : undefined })}
                         </span>
-                        <span className="text-[9px] text-[var(--m3-primary)] font-bold">
+                        <span className="text-xs text-[var(--m3-primary)] font-bold">
                           +{log.progressIncrement}{log.type === 'pages' ? 'p' : '%'}
                         </span>
                       </div>
                     </div>
                   ))
                 ) : (
-                  <div className="text-[10px] text-[var(--m3-on-surface-variant)] italic">{t.noActivity}</div>
+                  <div className="text-xs text-[var(--m3-on-surface-variant)] italic">{t.noActivity}</div>
                 )}
               </div>
             </motion.div>
@@ -1077,7 +1331,7 @@ export default function App() {
           {/* Main Content */}
       <main className="flex-1 overflow-y-auto pb-24 lg:pb-20 lg:pr-2">
         {/* Subject Filter Bar */}
-        <div className="mb-6 overflow-x-auto no-scrollbar py-1">
+        <div className="mb-4 overflow-x-auto no-scrollbar py-1">
           <div className="flex gap-2 min-w-max px-2">
             <button
               onClick={() => setSubjectFilter(null)}
@@ -1111,7 +1365,90 @@ export default function App() {
               ))
             }
           </div>
+
+          {activeTab === 'history' && (
+            <div className="flex justify-end px-2 mt-2">
+              <button
+                onClick={() => setIsSelectionMode(!isSelectionMode)}
+                className={cn(
+                  "flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-black uppercase tracking-widest transition-all active:scale-95",
+                  isSelectionMode 
+                    ? "bg-[var(--m3-primary)]/10 text-[var(--m3-primary)] border border-[var(--m3-primary)]/20" 
+                    : "bg-[var(--m3-surface-container-high)] text-[var(--m3-on-surface-variant)] border border-[var(--m3-outline)]/10"
+                )}
+              >
+                {isSelectionMode ? <X className="w-3.5 h-3.5" /> : <Edit3 className="w-3.5 h-3.5" />}
+                {isSelectionMode ? t.exitSelectionMode : t.selectionMode}
+              </button>
+            </div>
+          )}
         </div>
+
+        {/* Bulk Action Bar (Archive Tab) */}
+        <AnimatePresence>
+          {activeTab === 'history' && isSelectionMode && (
+            <motion.div
+              initial={{ opacity: 0, height: 0, marginBottom: 0 }}
+              animate={{ opacity: 1, height: 'auto', marginBottom: 24 }}
+              exit={{ opacity: 0, height: 0, marginBottom: 0 }}
+              className="px-2"
+            >
+              <div className="flex flex-wrap items-center justify-between gap-4 p-4 rounded-2xl bg-[var(--m3-surface-container)] border border-[var(--m3-outline)]/10 shadow-sm">
+                <div className="flex items-center gap-3">
+                  <span className="text-sm font-bold text-[var(--m3-on-surface)]">
+                    {selectedArchiveIds.size > 0 
+                      ? `${selectedArchiveIds.size} selected` 
+                      : language === 'ja' ? 'タスクを選択' : 'Select Tasks'}
+                  </span>
+                </div>
+                <div className="flex items-center gap-2">
+                  <button
+                    onClick={() => {
+                      const visibleIds = (Object.values(groupedSubmissions).flat() as Submission[]).map(s => s.id);
+                      if (selectedArchiveIds.size === visibleIds.length && visibleIds.length > 0) {
+                        setSelectedArchiveIds(new Set());
+                      } else {
+                        setSelectedArchiveIds(new Set(visibleIds));
+                      }
+                    }}
+                    className="m3-button-text h-10 px-4 text-xs"
+                  >
+                    {(() => {
+                      const visibleIds = (Object.values(groupedSubmissions).flat() as Submission[]).map(s => s.id);
+                      const isAllSelected = selectedArchiveIds.size === visibleIds.length && visibleIds.length > 0;
+                      return isAllSelected ? t.deselectAll : t.selectAll;
+                    })()}
+                  </button>
+                  <button
+                    onClick={() => {
+                      if (selectedArchiveIds.size === 0) return;
+                      setConfirmDialog({
+                        title: language === 'ja' ? '一括削除' : 'Bulk Delete',
+                        message: t.confirmDeleteSelected,
+                        onConfirm: async () => {
+                          try {
+                            const promises = Array.from(selectedArchiveIds).map((id: string) => deleteDoc(doc(db, 'submissions', id)));
+                            await Promise.all(promises);
+                            setSelectedArchiveIds(new Set());
+                            setConfirmDialog(null);
+                          } catch (error) {
+                            console.error("Bulk delete failed", error);
+                          }
+                        },
+                        onCancel: () => setConfirmDialog(null)
+                      });
+                    }}
+                    disabled={selectedArchiveIds.size === 0}
+                    className="m3-button-primary h-10 px-4 text-xs bg-[var(--m3-error)] hover:bg-[var(--m3-error)]/90 text-[var(--m3-on-error)] disabled:opacity-50 disabled:cursor-not-allowed"
+                  >
+                    <Trash2 className="w-3.5 h-3.5 mr-1" />
+                    {t.deleteSelected}
+                  </button>
+                </div>
+              </div>
+            </motion.div>
+          )}
+        </AnimatePresence>
 
         <LayoutGroup>
           <motion.div 
@@ -1139,7 +1476,7 @@ export default function App() {
                   <div className="flex items-center gap-2 px-2 border-b border-[var(--m3-outline)]/10 pb-2">
                     <div className="w-1 h-4 bg-[var(--m3-primary)] rounded-full" />
                     <h2 className="text-xl font-black text-[var(--m3-on-surface)] tracking-tight">{subject}</h2>
-                    <span className="text-[10px] font-black text-[var(--m3-on-surface-variant)] bg-[var(--m3-surface-container-high)] px-2 py-0.5 rounded-md ml-2">
+                    <span className="text-xs font-black text-[var(--m3-on-surface-variant)] bg-[var(--m3-surface-container-high)] px-2 py-0.5 rounded-md ml-2">
                       {(items as Submission[]).length}
                     </span>
                   </div>
@@ -1167,7 +1504,31 @@ export default function App() {
                                 submission={submission} 
                                 isHistoryView={activeTab === 'history'}
                                 language={language}
-                                onClick={() => setSelectedId(submission.id)}
+                                isSelectionMode={isSelectionMode}
+                                isSelected={selectedArchiveIds.has(submission.id)}
+                                onToggleSelect={(e) => {
+                                  e.stopPropagation();
+                                  const newSet = new Set(selectedArchiveIds);
+                                  if (newSet.has(submission.id)) {
+                                    newSet.delete(submission.id);
+                                  } else {
+                                    newSet.add(submission.id);
+                                  }
+                                  setSelectedArchiveIds(newSet);
+                                }}
+                                onClick={() => {
+                                  if (isSelectionMode) {
+                                    const newSet = new Set(selectedArchiveIds);
+                                    if (newSet.has(submission.id)) {
+                                      newSet.delete(submission.id);
+                                    } else {
+                                      newSet.add(submission.id);
+                                    }
+                                    setSelectedArchiveIds(newSet);
+                                  } else {
+                                    setSelectedId(submission.id);
+                                  }
+                                }}
                                 onToggleComplete={(e) => toggleComplete(submission.id, e)}
                                 onDelete={(e) => {
                                   e.stopPropagation();
@@ -1239,21 +1600,22 @@ export default function App() {
         transition={{ duration: 0.2, ease: "easeOut" }}
         className="fixed inset-0 z-[100] flex items-center justify-center p-6 bg-black/40 backdrop-blur-sm"
       >
-        <motion.div 
-          initial={{ opacity: 0, scale: 0.9, y: 20 }}
-          animate={{ opacity: 1, scale: 1, y: 0 }}
-          exit={{ opacity: 0, scale: 0.9, y: 20 }}
-          transition={{ duration: 0.25, ease: "easeOut" }}
-          className="m3-card relative w-full max-w-sm max-h-[90vh] overflow-y-auto"
-        >
-          <button onClick={() => setIsSettingsOpen(false)} className="absolute top-4 right-4 p-2 rounded-full hover:bg-[var(--m3-surface-container)] z-10">
-             <X className="w-5 h-5 text-[var(--m3-on-surface-variant)]" />
-          </button>
-          <h2 className="text-2xl font-bold mb-8">{t.settings}</h2>
-          
-          <div className="space-y-6 flex-1">
-            <div className="space-y-3">
-              <label className="text-[10px] font-black text-[var(--m3-on-surface-variant)] uppercase tracking-[0.2em] px-1">{t.language}</label>
+          <motion.div 
+            initial={{ opacity: 0, scale: 0.9, y: 20 }}
+            animate={{ opacity: 1, scale: 1, y: 0 }}
+            exit={{ opacity: 0, scale: 0.9, y: 20 }}
+            transition={{ duration: 0.25, ease: "easeOut" }}
+            className="m3-card relative w-full max-w-md max-h-[90vh] overflow-hidden flex flex-col"
+          >
+            <div className="flex-1 overflow-y-auto p-8 scrollbar-custom">
+              <button onClick={() => setIsSettingsOpen(false)} className="absolute top-4 right-4 p-2 rounded-full hover:bg-[var(--m3-surface-container)] z-10">
+                 <X className="w-5 h-5 text-[var(--m3-on-surface-variant)]" />
+              </button>
+              <h2 className="text-2xl font-bold mb-8">{t.settings}</h2>
+              
+              <div className="space-y-6">
+                <div className="space-y-3">
+              <label className="text-xs font-black text-[var(--m3-on-surface-variant)] uppercase tracking-[0.2em] px-1">{t.language}</label>
               <div className="segmented-control">
                 <button 
                   onClick={() => setLanguage('ja')}
@@ -1271,7 +1633,7 @@ export default function App() {
             </div>
 
             <div className="space-y-3">
-              <label className="text-[10px] font-black text-[var(--m3-on-surface-variant)] uppercase tracking-[0.2em] px-1">{t.theme}</label>
+              <label className="text-xs font-black text-[var(--m3-on-surface-variant)] uppercase tracking-[0.2em] px-1">{t.theme}</label>
               <div className="segmented-control">
                 <button 
                   onClick={() => setTheme('light')}
@@ -1290,10 +1652,10 @@ export default function App() {
               </div>
             </div>
             <div className="space-y-4 py-4 border-t border-[var(--m3-outline)]/10">
-              <label className="text-[10px] font-black text-[var(--m3-on-surface-variant)] uppercase tracking-[0.2em] px-1">{t.pomodoro}</label>
+              <label className="text-xs font-black text-[var(--m3-on-surface-variant)] uppercase tracking-[0.2em] px-1">{t.pomodoro}</label>
               <div className="grid grid-cols-2 gap-4">
                 <div className="space-y-1">
-                  <label className="text-[10px] font-bold text-[var(--m3-on-surface-variant)] uppercase tracking-widest">{t.focusTime} (m)</label>
+                  <label className="text-xs font-bold text-[var(--m3-on-surface-variant)] uppercase tracking-widest">{t.focusTime} (m)</label>
                   <input 
                     type="number"
                     value={pomodoroDurations.work / 60}
@@ -1302,7 +1664,7 @@ export default function App() {
                   />
                 </div>
                 <div className="space-y-1">
-                  <label className="text-[10px] font-bold text-[var(--m3-on-surface-variant)] uppercase tracking-widest">{t.breakTime} (m)</label>
+                  <label className="text-xs font-bold text-[var(--m3-on-surface-variant)] uppercase tracking-widest">{t.breakTime} (m)</label>
                   <input 
                     type="number"
                     value={pomodoroDurations.break / 60}
@@ -1314,30 +1676,43 @@ export default function App() {
             </div>
 
             <div className="space-y-4 pt-4 border-t border-[var(--m3-outline)]/10">
-              <label className="text-xs font-bold text-[var(--m3-on-surface-variant)] uppercase tracking-wider">{t.editSubjects}</label>
-              <div className="flex flex-wrap gap-2">
-                {subjects.map(subject => (
-                  <button
-                    key={subject}
-                    onClick={() => {
-                      const msg = language === 'ja' ? `${subject}${t.confirmDeleteSubject}` : `${t.confirmDeleteSubject}${subject}?`;
-                      setConfirmDialog({
-                        title: t.editSubjects,
-                        message: msg,
-                        onConfirm: () => {
-                          setSubjects(subjects.filter(s => s !== subject));
-                          setConfirmDialog(null);
-                        },
-                        onCancel: () => setConfirmDialog(null)
-                      });
-                    }}
-                    className="px-3 py-1.5 rounded-full bg-[var(--m3-surface-variant)] text-[var(--m3-on-surface-variant)] text-xs font-bold flex items-center gap-2 hover:bg-[var(--m3-error-container)] hover:text-[var(--m3-on-error-container)] transition-all"
-                  >
-                    {subject}
-                    <X className="w-3 h-3" />
-                  </button>
-                ))}
+              <div className="flex flex-col gap-1">
+                <label className="text-xs font-bold text-[var(--m3-on-surface-variant)] uppercase tracking-wider">{t.editSubjects}</label>
+                <p className="text-[10px] text-[var(--m3-on-surface-variant)] opacity-50 px-1">{t.reorderInfo}</p>
               </div>
+              <DndContext 
+                sensors={sensors}
+                collisionDetection={closestCenter}
+                onDragEnd={handleDragEnd}
+              >
+                <div className="flex flex-wrap gap-2">
+                  <SortableContext 
+                    items={subjects}
+                    strategy={verticalListSortingStrategy}
+                  >
+                    {subjects.map(subject => (
+                      <SortableSubjectItem 
+                        key={subject} 
+                        subject={subject} 
+                        t={t} 
+                        language={language}
+                        onDelete={() => {
+                          const msg = language === 'ja' ? `${subject}${t.confirmDeleteSubject}` : `${t.confirmDeleteSubject}${subject}?`;
+                          setConfirmDialog({
+                            title: t.editSubjects,
+                            message: msg,
+                            onConfirm: () => {
+                              setSubjects(subjects.filter(s => s !== subject));
+                              setConfirmDialog(null);
+                            },
+                            onCancel: () => setConfirmDialog(null)
+                          });
+                        }}
+                      />
+                    ))}
+                  </SortableContext>
+                </div>
+              </DndContext>
               <div className="flex gap-2">
                 <input 
                   type="text" 
@@ -1369,15 +1744,15 @@ export default function App() {
             </div>
 
             <div className="pt-6 border-t border-[var(--m3-outline)]/10 text-center">
-              <div className="text-[10px] font-black text-[var(--m3-on-surface-variant)] uppercase tracking-[0.2em] mb-2">{t.feedback}</div>
-              <p className="text-[10px] text-[var(--m3-on-surface-variant)]/60 font-medium mb-4">
+                <div className="text-xs font-black text-[var(--m3-on-surface-variant)] uppercase tracking-[0.2em] mb-2">{t.feedback}</div>
+              <p className="text-xs text-[var(--m3-on-surface-variant)]/60 font-medium mb-4">
                 {t.feedback_desc}
               </p>
               <a 
                 href="https://docs.google.com/forms/d/e/1FAIpQLSdEbdto4RIERpgNP0MUlLceT1nSEL907bOIo3CNt2XMiLi51w/viewform?usp=publish-editor"
                 target="_blank"
                 rel="noopener noreferrer"
-                className="inline-flex items-center gap-2 px-6 py-3 rounded-2xl bg-[var(--m3-primary-container)] text-[var(--m3-on-primary-container)] text-[10px] font-black uppercase tracking-widest hover:scale-105 active:scale-95 transition-all shadow-md group"
+                className="inline-flex items-center gap-2 px-6 py-3 rounded-2xl bg-[var(--m3-primary-container)] text-[var(--m3-on-primary-container)] text-xs font-black uppercase tracking-widest hover:scale-105 active:scale-95 transition-all shadow-md group"
               >
                 <Zap className="w-3 h-3 text-[var(--m3-primary)] group-hover:rotate-12 transition-transform" />
                 {t.send_feedback}
@@ -1385,18 +1760,19 @@ export default function App() {
             </div>
 
             <div className="pt-6 border-t border-[var(--m3-outline)]/10 text-center">
-              <div className="text-[10px] font-black text-[var(--m3-on-surface-variant)] uppercase tracking-[0.2em] mb-2">{t.license}</div>
-              <p className="text-[10px] text-[var(--m3-on-surface-variant)]/60 font-medium leading-relaxed">
+              <div className="text-xs font-black text-[var(--m3-on-surface-variant)] uppercase tracking-[0.2em] mb-2">{t.license}</div>
+              <p className="text-xs text-[var(--m3-on-surface-variant)]/60 font-medium leading-relaxed">
                 {t.license_desc}<br />
                 © 2026 Lumina Project
               </p>
-              <div className="mt-4 text-[9px] font-mono text-[var(--m3-on-surface-variant)]/30">
+              <div className="mt-4 text-[11px] font-mono text-[var(--m3-on-surface-variant)]/30">
                 Version {APP_VERSION}
               </div>
             </div>
           </div>
-        </motion.div>
+        </div>
       </motion.div>
+    </motion.div>
     )}
   </AnimatePresence>
 
@@ -1417,11 +1793,11 @@ export default function App() {
             <motion.div 
               layoutId={selectedId}
               transition={{ duration: 0.2, ease: "easeOut" }}
-              className="relative w-full max-w-lg m3-card !p-0 shadow-2xl border border-[var(--m3-outline)]/10 bg-[var(--m3-surface-container-high)] max-h-[90vh] overflow-y-auto"
+              className="relative w-full max-w-lg m3-card !p-0 shadow-2xl border border-[var(--m3-outline)]/10 bg-[var(--m3-surface-container-high)] max-h-[90vh] overflow-hidden flex flex-col"
             >
-              <div className="p-6 sm:p-10">
-                <div className="flex justify-between items-start mb-8">
-                  <motion.div layoutId={`subject-${selectedId}`} className="text-xs font-bold uppercase tracking-widest text-[var(--m3-primary)]">
+              <div className="flex-1 overflow-y-auto p-6 sm:p-10 scrollbar-custom">
+                <div className="flex items-center gap-2">
+                  <motion.div layoutId={`subject-${selectedId}`} className="text-sm font-bold uppercase tracking-widest text-[var(--m3-primary)]">
                     {selectedSubmission.subject}
                   </motion.div>
                   <button 
@@ -1451,11 +1827,11 @@ export default function App() {
                   </div>
 
                   <div className="space-y-3">
-                    <div className="flex justify-between items-end mb-1 text-xs">
+                    <div className="flex justify-between items-end mb-1 text-sm">
                       <span className="text-[var(--m3-on-surface-variant)] font-black uppercase tracking-tighter opacity-70">{t.progress}</span>
                       <span className="text-[var(--m3-on-surface)] font-light tracking-tighter">
-                        <span className="text-xl">{selectedSubmission.taskType === 'pages' ? selectedSubmission.currentPage : selectedSubmission.progress}</span>
-                        <span className="opacity-50 text-[10px] font-bold ml-0.5">
+                        <span className="text-2xl">{selectedSubmission.taskType === 'pages' ? selectedSubmission.currentPage : selectedSubmission.progress}</span>
+                        <span className="opacity-50 text-xs font-bold ml-0.5">
                           {selectedSubmission.taskType === 'pages' 
                             ? `/ ${selectedSubmission.endPage}p`
                             : `%`}
@@ -1472,33 +1848,31 @@ export default function App() {
                     </div>
                   </div>
 
-                  {selectedSubmission.activityLogs && selectedSubmission.activityLogs.length > 0 && (
-                    <div className="space-y-4">
-                      <h3 className="text-[10px] font-black text-[var(--m3-on-surface-variant)] uppercase tracking-[0.2em]">{t.recentActivity}</h3>
-                      <div className="space-y-2 max-h-40 overflow-y-auto pr-2 custom-scrollbar">
-                        {selectedSubmission.activityLogs.slice().reverse().map(log => (
-                          <div key={log.id} className="flex items-center gap-4 bg-[var(--m3-surface-container-low)] p-3 rounded-2xl border border-[var(--m3-outline-variant)]/10">
-                            <div className="w-8 h-8 rounded-full bg-[var(--m3-primary-container)] flex items-center justify-center shrink-0">
-                              <Zap className="w-3.5 h-3.5 text-[var(--m3-on-primary-container)]" />
+                  <div className="space-y-4">
+                    <h3 className="text-xs font-black text-[var(--m3-on-surface-variant)] uppercase tracking-[0.2em]">{t.recentActivity}</h3>
+                    <div className="space-y-2 max-h-40 overflow-y-auto pr-2 custom-scrollbar">
+                      {selectedSubmission.activityLogs.slice().reverse().map(log => (
+                        <div key={log.id} className="flex items-center gap-4 bg-[var(--m3-surface-container-low)] p-3 rounded-2xl border border-[var(--m3-outline-variant)]/10">
+                          <div className="w-8 h-8 rounded-full bg-[var(--m3-primary-container)] flex items-center justify-center shrink-0">
+                            <Zap className="w-3.5 h-3.5 text-[var(--m3-on-primary-container)]" />
+                          </div>
+                          <div className="flex-1 min-w-0">
+                            <div className="text-xs font-bold text-[var(--m3-on-surface-variant)] opacity-60">
+                              {format(log.timestamp.toDate(), 'M/d HH:mm')}
                             </div>
-                            <div className="flex-1 min-w-0">
-                              <div className="text-[10px] font-bold text-[var(--m3-on-surface-variant)] opacity-60">
-                                {format(log.timestamp.toDate(), 'M/d HH:mm')}
-                              </div>
-                              <div className="text-sm font-black text-[var(--m3-on-surface)]">
-                                {log.durationMinutes}{language === 'ja' ? '分間のセッション' : ' min session'}
-                              </div>
-                            </div>
-                            <div className="text-right">
-                              <div className="text-sm font-black text-[var(--m3-primary)]">
-                                +{log.progressIncrement}{log.type === 'pages' ? 'p' : '%'}
-                              </div>
+                            <div className="text-sm font-black text-[var(--m3-on-surface)]">
+                              {log.durationMinutes}{language === 'ja' ? '分間のセッション' : ' min session'}
                             </div>
                           </div>
-                        ))}
-                      </div>
+                          <div className="text-right">
+                            <div className="text-sm font-black text-[var(--m3-primary)]">
+                              +{log.progressIncrement}{log.type === 'pages' ? 'p' : '%'}
+                            </div>
+                          </div>
+                        </div>
+                      ))}
                     </div>
-                  )}
+                  </div>
 
                   <div className="space-y-3">
                     <h3 className="text-xs font-bold text-[var(--m3-on-surface-variant)] uppercase tracking-wider">{t.details}</h3>
@@ -1584,10 +1958,11 @@ export default function App() {
               animate={{ y: 0, opacity: 1 }}
               exit={{ y: '100%', opacity: 0 }}
               transition={{ duration: 0.2, ease: "easeOut" }}
-              className="relative w-full max-w-lg m3-card rounded-t-[28px] sm:rounded-[28px] p-6 sm:p-10 shadow-2xl border border-[var(--m3-outline)]/10 max-h-[90vh] overflow-y-auto"
+              className="relative w-full max-w-lg m3-card rounded-t-[28px] sm:rounded-[28px] p-0 shadow-2xl border border-[var(--m3-outline)]/10 max-h-[90vh] overflow-hidden flex flex-col"
             >
-              <div className="flex justify-between items-center mb-8 shrink-0">
-                <h2 className="text-2xl font-bold text-[var(--m3-on-surface)]">{t.addNew}</h2>
+              <div className="flex-1 overflow-y-auto p-6 sm:p-10 scrollbar-custom">
+                <div className="flex justify-between items-center mb-8 shrink-0">
+                  <h2 className="text-2xl font-bold text-[var(--m3-on-surface)]">{t.addNew}</h2>
                 <button onClick={() => setIsAdding(false)} className="p-2 rounded-full hover:bg-[var(--m3-surface-container)]">
                   <X className="w-6 h-6 text-[var(--m3-on-surface-variant)]" />
                 </button>
@@ -1600,20 +1975,60 @@ export default function App() {
                   </div>
                   <div className="space-y-2">
                     <label className="text-xs font-black text-[var(--m3-on-surface-variant)] uppercase tracking-widest px-1">{t.subject}</label>
-                    <div className="relative group">
-                      <input 
-                        name="subject" 
-                        required 
-                        type="text" 
-                        list="subjects"
-                        placeholder={t.subjectPlaceholder} 
-                        className="w-full px-5 py-4 rounded-2xl bg-[var(--m3-surface-container)] border border-[var(--m3-outline)]/10 focus:outline-none focus:ring-4 focus:ring-[var(--m3-primary)]/10 font-bold text-[var(--m3-on-surface)] transition-all placeholder:font-medium" 
-                      />
-                      <div className="absolute bottom-0 left-1/2 -translate-x-1/2 w-0 h-0.5 bg-[var(--m3-primary)] group-focus-within:w-[80%] transition-all duration-300 rounded-full" />
+                    <div className="relative">
+                      <div className="relative group">
+                        <input 
+                          name="subject" 
+                          required 
+                          type="text" 
+                          value={modalSubject}
+                          onChange={(e) => {
+                            setModalSubject(e.target.value);
+                            setIsSubjectDropdownOpen(true);
+                          }}
+                          onFocus={() => setIsSubjectDropdownOpen(true)}
+                          onBlur={() => setTimeout(() => setIsSubjectDropdownOpen(false), 200)}
+                          placeholder={t.subjectPlaceholder} 
+                          className="w-full px-5 py-4 pr-12 rounded-2xl bg-[var(--m3-surface-container)] border border-[var(--m3-outline)]/10 focus:outline-none focus:ring-4 focus:ring-[var(--m3-primary)]/10 font-bold text-[var(--m3-on-surface)] transition-all placeholder:font-medium" 
+                        />
+                        <button
+                          type="button"
+                          onClick={() => setIsSubjectDropdownOpen(!isSubjectDropdownOpen)}
+                          className="absolute right-4 top-1/2 -translate-y-1/2 p-1 rounded-full hover:bg-[var(--m3-surface-container-highest)] transition-colors"
+                        >
+                          <ChevronDown className={cn("w-5 h-5 text-[var(--m3-on-surface-variant)] transition-transform duration-200", isSubjectDropdownOpen && "rotate-180")} />
+                        </button>
+                        <div className="absolute bottom-0 left-1/2 -translate-x-1/2 w-0 h-0.5 bg-[var(--m3-primary)] group-focus-within:w-[80%] transition-all duration-300 rounded-full" />
+                      </div>
+
+                      <AnimatePresence>
+                        {isSubjectDropdownOpen && (
+                          <motion.div
+                            initial={{ opacity: 0, y: -10, scale: 0.95 }}
+                            animate={{ opacity: 1, y: 4, scale: 1 }}
+                            exit={{ opacity: 0, y: -10, scale: 0.95 }}
+                            className="absolute z-50 left-0 right-0 top-full bg-[var(--m3-surface-container-high)] border border-[var(--m3-outline)]/10 rounded-2xl shadow-xl max-h-60 overflow-y-auto scrollbar-custom py-2"
+                          >
+                            {subjects.map(s => (
+                              <button
+                                key={s}
+                                type="button"
+                                onClick={() => {
+                                  setModalSubject(s);
+                                  setIsSubjectDropdownOpen(false);
+                                }}
+                                className={cn(
+                                  "w-full text-left px-5 py-3 text-sm font-bold transition-colors hover:bg-[var(--m3-primary)]/10",
+                                  modalSubject === s ? "text-[var(--m3-primary)] bg-[var(--m3-primary)]/5" : "text-[var(--m3-on-surface)]"
+                                )}
+                              >
+                                {s}
+                              </button>
+                            ))}
+                          </motion.div>
+                        )}
+                      </AnimatePresence>
                     </div>
-                    <datalist id="subjects">
-                      {subjects.map(s => <option key={s} value={s} />)}
-                    </datalist>
                   </div>
                 </div>
 
@@ -1653,11 +2068,11 @@ export default function App() {
                       className="grid grid-cols-2 gap-4 pt-2"
                     >
                       <div className="space-y-1">
-                        <label className="text-[10px] font-bold text-[var(--m3-on-surface-variant)] uppercase">{t.startPage}</label>
+                        <label className="text-xs font-bold text-[var(--m3-on-surface-variant)] uppercase">{t.startPage}</label>
                         <input name="startPage" type="number" placeholder="0" className="w-full px-4 py-3 rounded-xl bg-[var(--m3-surface-container)] border border-[var(--m3-outline)]/10 text-sm font-bold focus:outline-none focus:ring-4 focus:ring-[var(--m3-primary)]/10 transition-all placeholder:font-medium" />
                       </div>
                       <div className="space-y-1">
-                        <label className="text-[10px] font-bold text-[var(--m3-on-surface-variant)] uppercase">{t.endPage}</label>
+                        <label className="text-xs font-bold text-[var(--m3-on-surface-variant)] uppercase">{t.endPage}</label>
                         <input name="endPage" type="number" placeholder="100" className="w-full px-4 py-3 rounded-xl bg-[var(--m3-surface-container)] border border-[var(--m3-outline)]/10 text-sm font-bold focus:outline-none focus:ring-4 focus:ring-[var(--m3-primary)]/10 transition-all placeholder:font-medium" />
                       </div>
                     </motion.div>
@@ -1714,7 +2129,7 @@ export default function App() {
                   </div>
                 </div>
                   <div className="space-y-2">
-                    <label className="text-[10px] font-black text-[var(--m3-on-surface-variant)] uppercase tracking-[0.1em] px-1">{t.details}</label>
+                    <label className="text-xs font-black text-[var(--m3-on-surface-variant)] uppercase tracking-[0.1em] px-1">{t.details}</label>
                     <textarea name="description" placeholder={t.descriptionPlaceholder} rows={3} className="w-full px-5 py-4 rounded-2xl bg-[var(--m3-surface-container)] border border-[var(--m3-outline)]/10 focus:outline-none focus:ring-4 focus:ring-[var(--m3-primary)]/10 font-medium resize-none text-[var(--m3-on-surface)] transition-all" />
                   </div>
                 <button 
@@ -1724,8 +2139,9 @@ export default function App() {
                   {t.record}
                 </button>
               </form>
-            </motion.div>
+            </div>
           </motion.div>
+        </motion.div>
         )}
       </AnimatePresence>
 
@@ -1764,7 +2180,7 @@ export default function App() {
                     <motion.div 
                       layoutId="pomodoro-badge"
                       className={cn(
-                        "px-3 py-1 rounded-full text-[10px] font-black uppercase tracking-widest flex items-center gap-1.5",
+                        "px-3 py-1 rounded-full text-xs font-black uppercase tracking-widest flex items-center gap-1.5",
                         pomodoroPhase === 'work' 
                           ? "bg-[var(--m3-primary)] text-[var(--m3-on-primary)]" 
                           : "bg-[var(--m3-secondary-container)] text-[var(--m3-on-secondary-container)]"
@@ -1775,7 +2191,7 @@ export default function App() {
                     </motion.div>
                   )}
                   {pomodoroSessionCount > 0 && (
-                    <div className="px-3 py-1 rounded-full bg-[var(--m3-surface-container-high)] text-[var(--m3-on-surface-variant)] text-[10px] font-black uppercase tracking-widest">
+                    <div className="px-3 py-1 rounded-full bg-[var(--m3-surface-container-high)] text-[var(--m3-on-surface-variant)] text-xs font-black uppercase tracking-widest">
                       {t.sessions}: {pomodoroSessionCount}
                     </div>
                   )}
@@ -1788,7 +2204,7 @@ export default function App() {
                   >
                     {submissions.find(s => s.id === activeTimerId)?.title}
                   </motion.h2>
-                  <div className="text-[9px] sm:text-[10px] font-black text-[var(--m3-primary)] uppercase tracking-[0.2em]">
+                  <div className="text-xs font-black text-[var(--m3-primary)] uppercase tracking-[0.2em]">
                     {submissions.find(s => s.id === activeTimerId)?.subject}
                   </div>
                 </div>
@@ -1817,7 +2233,7 @@ export default function App() {
                     {[0, 15, 30, 45].map((val) => (
                       <div 
                         key={val}
-                        className="absolute w-8 h-8 flex items-center justify-center text-[10px] font-black text-[var(--m3-on-surface-variant)] opacity-40"
+                        className="absolute w-8 h-8 flex items-center justify-center text-xs font-black text-[var(--m3-on-surface-variant)] opacity-40"
                         style={{ 
                           top: val === 0 ? '25px' : val === 30 ? 'auto' : '50%',
                           bottom: val === 30 ? '25px' : 'auto',
@@ -1865,7 +2281,7 @@ export default function App() {
                           {(timerSeconds % 60).toString().padStart(2, '0')}
                         </div>
                         {(isTimerPaused || !isTimerRunning) && (
-                           <div className="text-[10px] font-black text-[var(--m3-error)] uppercase tracking-widest mt-1 animate-pulse">
+                           <div className="text-xs font-black text-[var(--m3-error)] uppercase tracking-widest mt-1 animate-pulse">
                              {!isTimerRunning ? (language === 'ja' ? '終了/待機中' : 'IDLE/BREAK') : t.pause}
                            </div>
                         )}
@@ -1877,7 +2293,7 @@ export default function App() {
                     {timerMode === 'pomodoro' && (
                       <button 
                         onClick={() => setShowDigitalTimer(!showDigitalTimer)}
-                        className="text-[10px] font-black uppercase tracking-widest text-[var(--m3-primary)] hover:opacity-80 transition-opacity flex items-center gap-2 mb-2"
+                        className="text-xs font-black uppercase tracking-widest text-[var(--m3-primary)] hover:opacity-80 transition-opacity flex items-center gap-2 mb-2"
                       >
                         {showDigitalTimer ? <EyeOff className="w-3 h-3" /> : <Eye className="w-3 h-3" />}
                         {t.toggleDigitalTimer}
@@ -1953,7 +2369,7 @@ export default function App() {
                     }}
                   />
                   <div className="space-y-4">
-                    <div className="flex justify-between text-[10px] font-bold text-[var(--m3-on-surface-variant)] uppercase">
+                    <div className="flex justify-between text-xs font-bold text-[var(--m3-on-surface-variant)] uppercase">
                       <span>{t.currentProgress}: {submissions.find(s => s.id === activeTimerId)?.progress}%</span>
                       {previewProgress !== null && (
                         <span className="text-[var(--m3-primary)]">{t.afterUpdate}: {previewProgress}%</span>
@@ -2023,10 +2439,11 @@ export default function App() {
               animate={{ y: 0, opacity: 1 }}
               exit={{ y: '100%', opacity: 0 }}
               transition={{ duration: 0.2, ease: "easeOut" }}
-              className="relative w-full max-w-lg m3-card rounded-t-[28px] sm:rounded-[28px] p-6 sm:p-10 shadow-2xl border border-[var(--m3-outline)]/10 max-h-[90vh] overflow-y-auto"
+              className="relative w-full max-w-lg m3-card rounded-t-[28px] sm:rounded-[28px] p-0 shadow-2xl border border-[var(--m3-outline)]/10 max-h-[90vh] overflow-hidden flex flex-col"
             >
-              <div className="flex justify-between items-center mb-8 shrink-0">
-                <h2 className="text-2xl font-bold text-[var(--m3-on-surface)]">{t.editTask}</h2>
+              <div className="flex-1 overflow-y-auto p-6 sm:p-10 scrollbar-custom">
+                <div className="flex justify-between items-center mb-8 shrink-0">
+                  <h2 className="text-2xl font-bold text-[var(--m3-on-surface)]">{t.editTask}</h2>
                 <button onClick={() => {
                   setIsEditing(false);
                   setEditData(null);
@@ -2042,20 +2459,59 @@ export default function App() {
                   </div>
                   <div className="space-y-2">
                     <label className="text-xs font-black text-[var(--m3-on-surface-variant)] uppercase tracking-widest px-1">{t.subject}</label>
-                    <div className="relative group">
-                      <input 
-                        name="subject" 
-                        defaultValue={editData.subject} 
-                        required 
-                        type="text" 
-                        list="subjects-edit"
-                        className="w-full px-5 py-4 rounded-2xl bg-[var(--m3-surface-container)] border border-[var(--m3-outline)]/10 focus:outline-none focus:ring-4 focus:ring-[var(--m3-primary)]/10 font-bold text-[var(--m3-on-surface)] transition-all placeholder:font-medium" 
-                      />
-                      <div className="absolute bottom-0 left-1/2 -translate-x-1/2 w-0 h-0.5 bg-[var(--m3-primary)] group-focus-within:w-[80%] transition-all duration-300 rounded-full" />
+                    <div className="relative">
+                      <div className="relative group">
+                        <input 
+                          name="subject" 
+                          value={modalSubject}
+                          onChange={(e) => {
+                            setModalSubject(e.target.value);
+                            setIsSubjectDropdownOpen(true);
+                          }}
+                          onFocus={() => setIsSubjectDropdownOpen(true)}
+                          onBlur={() => setTimeout(() => setIsSubjectDropdownOpen(false), 200)}
+                          required 
+                          type="text" 
+                          className="w-full px-5 py-4 pr-12 rounded-2xl bg-[var(--m3-surface-container)] border border-[var(--m3-outline)]/10 focus:outline-none focus:ring-4 focus:ring-[var(--m3-primary)]/10 font-bold text-[var(--m3-on-surface)] transition-all placeholder:font-medium" 
+                        />
+                        <button
+                          type="button"
+                          onClick={() => setIsSubjectDropdownOpen(!isSubjectDropdownOpen)}
+                          className="absolute right-4 top-1/2 -translate-y-1/2 p-1 rounded-full hover:bg-[var(--m3-surface-container-highest)] transition-colors"
+                        >
+                          <ChevronDown className={cn("w-5 h-5 text-[var(--m3-on-surface-variant)] transition-transform duration-200", isSubjectDropdownOpen && "rotate-180")} />
+                        </button>
+                        <div className="absolute bottom-0 left-1/2 -translate-x-1/2 w-0 h-0.5 bg-[var(--m3-primary)] group-focus-within:w-[80%] transition-all duration-300 rounded-full" />
+                      </div>
+
+                      <AnimatePresence>
+                        {isSubjectDropdownOpen && (
+                          <motion.div
+                            initial={{ opacity: 0, y: -10, scale: 0.95 }}
+                            animate={{ opacity: 1, y: 4, scale: 1 }}
+                            exit={{ opacity: 0, y: -10, scale: 0.95 }}
+                            className="absolute z-50 left-0 right-0 top-full bg-[var(--m3-surface-container-high)] border border-[var(--m3-outline)]/10 rounded-2xl shadow-xl max-h-60 overflow-y-auto scrollbar-custom py-2"
+                          >
+                            {subjects.map(s => (
+                              <button
+                                key={s}
+                                type="button"
+                                onClick={() => {
+                                  setModalSubject(s);
+                                  setIsSubjectDropdownOpen(false);
+                                }}
+                                className={cn(
+                                  "w-full text-left px-5 py-3 text-sm font-bold transition-colors hover:bg-[var(--m3-primary)]/10",
+                                  modalSubject === s ? "text-[var(--m3-primary)] bg-[var(--m3-primary)]/5" : "text-[var(--m3-on-surface)]"
+                                )}
+                              >
+                                {s}
+                              </button>
+                            ))}
+                          </motion.div>
+                        )}
+                      </AnimatePresence>
                     </div>
-                    <datalist id="subjects-edit">
-                      {subjects.map(s => <option key={s} value={s} />)}
-                    </datalist>
                   </div>
                 </div>
                 <div className="flex flex-col gap-6">
@@ -2109,7 +2565,7 @@ export default function App() {
                   </div>
                 </div>
                   <div className="space-y-2">
-                    <label className="text-[10px] font-black text-[var(--m3-on-surface-variant)] uppercase tracking-[0.1em] px-1">{t.details}</label>
+                    <label className="text-xs font-black text-[var(--m3-on-surface-variant)] uppercase tracking-[0.1em] px-1">{t.details}</label>
                     <textarea name="description" defaultValue={editData.description} rows={3} className="w-full px-5 py-4 rounded-2xl bg-[var(--m3-surface-container)] border border-[var(--m3-outline)]/10 focus:outline-none focus:ring-4 focus:ring-[var(--m3-primary)]/10 font-medium resize-none text-[var(--m3-on-surface)] transition-all" />
                   </div>
                 <div className="flex gap-4">
@@ -2145,8 +2601,9 @@ export default function App() {
                   </button>
                 </div>
               </form>
-            </motion.div>
+            </div>
           </motion.div>
+        </motion.div>
         )}
       </AnimatePresence>
 
@@ -2279,7 +2736,10 @@ function SubmissionCard({
   onToggleComplete,
   onDelete,
   isHistoryView,
-  language = 'ja'
+  language = 'ja',
+  isSelectionMode,
+  isSelected,
+  onToggleSelect
 }: { 
   submission: Submission; 
   onClick: () => void;
@@ -2287,6 +2747,9 @@ function SubmissionCard({
   onDelete?: (e: React.MouseEvent) => void;
   isHistoryView?: boolean;
   language?: Language;
+  isSelectionMode?: boolean;
+  isSelected?: boolean;
+  onToggleSelect?: (e: React.MouseEvent) => void;
   key?: string | number;
 }) {
   const t = translations[language];
@@ -2316,9 +2779,26 @@ function SubmissionCard({
           opacity: { duration: 0.2 },
           scale: { duration: 0.2 }
         }}
+        onClick={onClick}
         whileTap={{ scale: 0.99 }}
-        className="group relative bg-[var(--m3-surface-container)] rounded-[20px] p-5 flex items-center gap-4 border border-[var(--m3-outline)]/10"
+        className={cn(
+          "group relative bg-[var(--m3-surface-container)] rounded-[20px] p-5 flex items-center gap-4 border cursor-pointer transition-colors",
+          isSelected ? "border-[var(--m3-primary)] bg-[var(--m3-primary-container)]/10" : "border-[var(--m3-outline)]/10 hover:border-[var(--m3-primary)]/30"
+        )}
       >
+        {isHistoryView && isSelectionMode && onToggleSelect && (
+          <div 
+            onClick={onToggleSelect}
+            className={cn(
+              "w-6 h-6 rounded-md border flex items-center justify-center shrink-0 transition-colors",
+              isSelected 
+                ? "bg-[var(--m3-primary)] border-[var(--m3-primary)] text-[var(--m3-on-primary)]" 
+                : "border-[var(--m3-outline)]/30 hover:border-[var(--m3-primary)]/50 bg-[var(--m3-surface)]"
+            )}
+          >
+            {isSelected && <CheckCircle2 className="w-4 h-4" />}
+          </div>
+        )}
         <div className="w-10 h-10 rounded-full bg-[var(--m3-surface-variant)] flex items-center justify-center shrink-0">
           <BookOpen className="w-5 h-5 text-[var(--m3-on-surface-variant)]" />
         </div>
@@ -2327,12 +2807,12 @@ function SubmissionCard({
             <motion.span 
               layoutId={`subject-${submission.id}`} 
               transition={{ duration: 0.25, ease: "easeOut" }}
-              className="text-[10px] font-black text-[var(--m3-primary)] uppercase tracking-[0.15em]"
+              className="text-xs font-black text-[var(--m3-primary)] uppercase tracking-[0.15em]"
             >
               {submission.subject}
             </motion.span>
-            <span className="text-[10px] text-[var(--m3-outline)]">•</span>
-            <span className="text-[10px] font-medium text-[var(--m3-on-surface-variant)]">
+            <span className="text-xs text-[var(--m3-outline)]">•</span>
+            <span className="text-xs font-medium text-[var(--m3-on-surface-variant)]">
               {format(((submission.deletedAt || submission.completedAt) as any)?.toDate() || new Date(), 'yyyy/MM/dd HH:mm')}
             </span>
           </div>
@@ -2378,12 +2858,12 @@ function SubmissionCard({
             <motion.span 
               layoutId={`subject-${submission.id}`} 
               transition={{ duration: 0.25, ease: "easeOut" }}
-              className="text-[11px] font-black uppercase tracking-[0.2em] text-[var(--m3-primary)]"
+              className="text-xs font-black uppercase tracking-[0.2em] text-[var(--m3-primary)]"
             >
               {submission.subject}
             </motion.span>
             <div className={cn(
-              "flex items-center gap-1 px-2 py-0.5 rounded-full text-[9px] font-black uppercase tracking-tighter",
+              "flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-black uppercase tracking-tighter",
               submission.priority === 'high' ? "bg-red-500 text-white shadow-[0_0_8px_rgba(239,68,68,0.5)]" : 
               submission.priority === 'medium' ? "bg-orange-500 text-white" : "bg-blue-500 text-white"
             )}>
@@ -2404,7 +2884,7 @@ function SubmissionCard({
         </div>
         <div className="flex flex-col items-end gap-2 shrink-0">
           <div className={cn(
-            "text-[11px] font-black px-4 py-1.5 rounded-xl uppercase tracking-wider shadow-sm",
+            "text-xs font-black px-4 py-1.5 rounded-xl uppercase tracking-wider shadow-sm",
             urgencyStyles.tag,
             submission.priority === 'high' && submission.status !== 'completed' && "animate-pulse"
           )}>
@@ -2423,11 +2903,11 @@ function SubmissionCard({
               <Calendar className="w-4 h-4" />
             </div>
             <div className="flex flex-col">
-              <span className="text-[12px] font-bold">
+              <span className="text-sm font-bold">
                 {format(submission.deadline, 'MM/dd' + (submission.deadline.getHours() === 23 && submission.deadline.getMinutes() === 59 ? '' : ' HH:mm'))}
               </span>
               <span className={cn(
-                "text-[10px] font-bold",
+                "text-xs font-bold",
                 isOverdue ? "text-red-600 dark:text-red-400" : "text-[var(--m3-on-surface-variant)] opacity-70"
               )}>
                 {isOverdue ? t.overdue : `${t.daysLeft} ${daysLeft}${t.days}`}
@@ -2437,7 +2917,7 @@ function SubmissionCard({
           {submission.taskType === 'pages' && (
             <div className="flex items-center gap-2 text-[var(--m3-on-surface-variant)] mt-1">
               <BookOpen className="w-4 h-4 opacity-70" />
-              <span className="text-[11px] font-bold tabular-nums">
+              <span className="text-xs font-bold tabular-nums">
                 {submission.currentPage} <span className="opacity-40">/</span> {submission.endPage}p
               </span>
             </div>
@@ -2446,7 +2926,7 @@ function SubmissionCard({
         
         <div className="flex flex-col items-end gap-2 w-6/12 max-w-[140px]">
            <div className="flex justify-between w-full px-0.5">
-              <span className="text-[12px] font-black tabular-nums text-[var(--m3-primary)] leading-none">{submission.progress}%</span>
+              <span className="text-sm font-black tabular-nums text-[var(--m3-primary)] leading-none">{submission.progress}%</span>
            </div>
            <div className="h-2 w-full bg-[var(--m3-surface-variant)]/50 rounded-full overflow-hidden shadow-inner p-[1px]">
               <motion.div 
@@ -2462,5 +2942,58 @@ function SubmissionCard({
         </div>
       </div>
     </motion.div>
+  );
+}
+
+function SortableSubjectItem({ subject, onDelete, language, t }: { 
+  subject: string; 
+  onDelete: () => void; 
+  language: string; 
+  t: any;
+  key?: string;
+}) {
+  const {
+    attributes,
+    listeners,
+    setNodeRef,
+    transform,
+    transition,
+    isDragging
+  } = useSortable({ id: subject });
+
+  const style = {
+    transform: CSS.Transform.toString(transform),
+    transition,
+    zIndex: isDragging ? 50 : undefined,
+  };
+
+  return (
+    <div
+      ref={setNodeRef}
+      style={style}
+      {...attributes}
+      className={cn(
+        "px-3 py-1.5 rounded-full bg-[var(--m3-surface-variant)] text-[var(--m3-on-surface-variant)] text-xs font-bold flex items-center gap-2 transition-all cursor-grab active:cursor-grabbing hover:bg-[var(--m3-surface-container-high)] border border-transparent",
+        isDragging && "opacity-50 border-[var(--m3-primary)] scale-105 shadow-lg bg-[var(--m3-primary-container)] text-[var(--m3-on-primary-container)]"
+      )}
+    >
+      <div {...listeners} className="flex items-center gap-2">
+        <div className="flex flex-col gap-0.5 opacity-30">
+          <div className="w-1 h-0.5 bg-current rounded-full" />
+          <div className="w-1 h-0.5 bg-current rounded-full" />
+          <div className="w-1 h-0.5 bg-current rounded-full" />
+        </div>
+        {subject}
+      </div>
+      <button
+        onClick={(e) => {
+          e.stopPropagation();
+          onDelete();
+        }}
+        className="p-0.5 hover:bg-black/5 rounded-full transition-colors"
+      >
+        <X className="w-3 h-3" />
+      </button>
+    </div>
   );
 }

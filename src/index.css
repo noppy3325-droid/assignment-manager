@@ -91,7 +91,7 @@
 
   /* Chip/Pill selection */
   .m3-chip {
-    @apply px-4 py-2 rounded-2xl text-xs font-bold border transition-all duration-300 flex items-center gap-2 cursor-pointer;
+    @apply px-4 py-2 rounded-2xl text-sm font-bold border transition-all duration-300 flex items-center gap-2 cursor-pointer;
   }
   
   .m3-chip-selected {
@@ -133,6 +133,27 @@
   .no-scrollbar {
     -ms-overflow-style: none;
     scrollbar-width: none;
+  }
+
+  /* Custom scrollbar for modals that respects rounded corners */
+  .scrollbar-custom {
+    scrollbar-gutter: stable;
+  }
+  
+  .scrollbar-custom::-webkit-scrollbar {
+    width: 10px;
+  }
+  
+  .scrollbar-custom::-webkit-scrollbar-thumb {
+    background: var(--m3-outline-variant);
+    border-radius: 20px;
+    border: 3px solid transparent;
+    background-clip: padding-box;
+  }
+  
+  .scrollbar-custom::-webkit-scrollbar-track {
+    background: transparent;
+    margin-block: 24px; /* Inset from corners */
   }
 }
 
