@@ -125,6 +125,19 @@ const DEFAULT_SUBJECTS = [
 
 const APP_VERSION = '1.2.0';
 
+const RELEASE_NOTES = {
+  version: '1.2.0',
+  title: "🎉 アップデートのお知らせ (v1.2.0)",
+  features: {
+    title: "✨ 新機能・改善点",
+    items: [
+      "設定画面から「教科の並び替え」ができるようになりました",
+      "アーカイブ済み（履歴）タスクの「選択削除」に対応しました",
+      "タスク詳細画面に、直接進捗を変更できる「進捗を入力」機能を追加しました"
+    ]
+  }
+};
+
 const TERMS_OF_SERVICE = {
   title: "🚀 Submission-Manager アプリ概要",
   intro: "「進捗を可視化し、提出期限を逃さない。」\n\nSubmission-Managerは、日々の課題や提出物を一括管理し、学習効率を最大化するために開発された進捗管理ツールです。",
@@ -181,6 +194,9 @@ export default function App() {
   const [isSubjectDropdownOpen, setIsSubjectDropdownOpen] = useState(false);
   const [isTermsAccepted, setIsTermsAccepted] = useState(() => {
     return localStorage.getItem('app-terms-accepted') === 'true';
+  });
+  const [showUpdateNotice, setShowUpdateNotice] = useState(() => {
+    return localStorage.getItem('app-last-version') !== APP_VERSION;
   });
   const [showTermsModal, setShowTermsModal] = useState(false);
   const [hasScrolledToBottom, setHasScrolledToBottom] = useState(false);
@@ -1881,13 +1897,29 @@ export default function App() {
                     </p>
                   </div>
 
-                  <div className="flex flex-col gap-3">
+                  <div className="flex flex-col gap-2.5">
                     <button 
                       onClick={() => setIsFocusSelectorOpen(true)}
-                      className="w-full m3-button-primary"
+                      className="w-full flex items-center justify-center gap-2 px-4 py-3.5 rounded-2xl font-bold transition-all active:scale-[0.98] bg-transparent border border-[var(--m3-primary)]/20 text-[var(--m3-primary)] hover:bg-[var(--m3-primary)]/5"
                     >
                       <Zap className="w-5 h-5" />
                       {t.startTimer}
+                    </button>
+                    
+                    <button 
+                      onClick={() => {
+                        setActiveTimerId(selectedSubmission.id);
+                        setTimerSeconds(0);
+                        setIsTimerRunning(false);
+                        setIsTimerPaused(false);
+                        setShowProgressInput(true);
+                        setProgressInputValue("");
+                        setSelectedId(null);
+                      }}
+                      className="w-full flex items-center justify-center gap-2 px-4 py-3.5 rounded-2xl font-bold transition-all active:scale-[0.98] border-none bg-[var(--m3-primary)]/15 text-[var(--m3-primary)] hover:bg-[var(--m3-primary)]/25"
+                    >
+                      <CheckSquare className="w-5 h-5" />
+                      {t.progressUpdate}
                     </button>
                     
                     <button 
@@ -1899,7 +1931,7 @@ export default function App() {
                         setIsEditing(true);
                         setSelectedId(null);
                       }}
-                      className="w-full m3-button-outline"
+                      className="w-full flex items-center justify-center gap-2 px-4 py-3.5 rounded-2xl font-bold transition-all active:scale-[0.98] border-none bg-[var(--m3-primary)]/60 text-white hover:bg-[var(--m3-primary)]/70"
                     >
                       <Edit3 className="w-5 h-5" />
                       {t.editTask}
@@ -1911,9 +1943,9 @@ export default function App() {
                           toggleComplete(selectedSubmission.id, e as any);
                           setSelectedId(null);
                         }}
-                        className="w-full m3-button-primary"
+                        className="w-full flex items-center justify-center gap-2 px-4 py-3.5 rounded-2xl font-bold transition-all active:scale-[0.98] border-none bg-[var(--m3-primary)] text-[var(--m3-on-primary)] shadow-md shadow-[var(--m3-primary)]/20 hover:shadow-lg hover:brightness-110"
                       >
-                        <CheckCircle2 className="w-4 h-4 ml-[-4px]" />
+                        <CheckCircle2 className="w-5 h-5" />
                         {t.complete}
                       </button>
                     )}
@@ -2720,6 +2752,62 @@ export default function App() {
                   className="m3-button-primary"
                 >
                   {confirmDialog.confirmLabel || (language === 'ja' ? 'はい' : 'Confirm')}
+                </button>
+              </div>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      <AnimatePresence>
+        {showUpdateNotice && (
+          <motion.div 
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 z-[300] flex items-center justify-center p-4 sm:p-6 bg-black/60 backdrop-blur-md"
+          >
+            <motion.div 
+              initial={{ scale: 0.9, opacity: 0, y: 20 }}
+              animate={{ scale: 1, opacity: 1, y: 0 }}
+              exit={{ scale: 0.9, opacity: 0, y: 20 }}
+              className="m3-card !bg-white w-full max-w-2xl max-h-[85vh] flex flex-col shadow-2xl relative overflow-hidden text-slate-900"
+            >
+              <div className="p-4 sm:p-5 border-b border-slate-200 shrink-0 bg-slate-50 flex justify-between items-center">
+                <h2 className="text-lg font-black text-slate-900 flex items-center gap-3">
+                  <Zap className="w-5 h-5 text-[var(--m3-primary)]" />
+                  {RELEASE_NOTES.title}
+                </h2>
+                <div className="text-xs font-bold bg-slate-200 text-slate-600 px-2.5 py-1 rounded-md">
+                   v{RELEASE_NOTES.version}
+                </div>
+              </div>
+              
+              <div className="flex-1 overflow-y-auto p-5 sm:p-8 scrollbar-custom space-y-6 text-slate-800">
+                <div className="space-y-4">
+                  <h3 className="text-base font-black flex items-center gap-2 text-slate-900">
+                    {RELEASE_NOTES.features.title}
+                  </h3>
+                  <ul className="space-y-3">
+                    {RELEASE_NOTES.features.items.map((item, index) => (
+                      <li key={index} className="flex gap-3 text-sm font-bold text-slate-700">
+                        <div className="mt-1.5 w-1.5 h-1.5 rounded-full bg-[var(--m3-primary)] shrink-0" />
+                        {item}
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              </div>
+              
+              <div className="p-4 sm:p-5 border-t border-slate-200 flex justify-end gap-3 bg-slate-50">
+                <button 
+                  onClick={() => {
+                    localStorage.setItem('app-last-version', APP_VERSION);
+                    setShowUpdateNotice(false);
+                  }}
+                  className="px-6 py-2.5 rounded-xl bg-[var(--m3-primary)] text-white font-bold text-sm hover:brightness-110 active:scale-95 transition-all shadow-md shadow-[var(--m3-primary)]/20"
+                >
+                  確認しました
                 </button>
               </div>
             </motion.div>
