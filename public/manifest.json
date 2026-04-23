@@ -1,0 +1,21 @@
+{
+  "short_name": "Lumina",
+  "name": "Lumina Submission Manager",
+  "icons": [
+    {
+      "src": "/pwa-192x192.png",
+      "type": "image/png",
+      "sizes": "192x192"
+    },
+    {
+      "src": "/pwa-512x512.png",
+      "type": "image/png",
+      "sizes": "512x512",
+      "purpose": "any maskable"
+    }
+  ],
+  "start_url": ".",
+  "display": "standalone",
+  "theme_color": "#0066FF",
+  "background_color": "#ffffff"
+}
