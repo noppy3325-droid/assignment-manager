@@ -75,6 +75,10 @@ export const translations = {
     language: "言語",
     light: "ライト",
     navy: "ネイビー",
+    theme_dog: "🐶 いぬ",
+    theme_cat: "🐱 ねこ",
+    theme_animal: "🦁 サファリ",
+    theme_flower: "🌸 フラワー",
     editSubjects: "教科の編集",
     addSubject: "追加",
     newSubjectPlaceholder: "新しい教科名...",
@@ -91,6 +95,10 @@ export const translations = {
     feedback: "ご意見・ご要望",
     feedback_desc: "アプリの改善にご協力ください",
     send_feedback: "意見箱を開く",
+    termsOfService: "利用規約",
+    progressLabel: "進捗",
+    logout: "ログアウト",
+    version: "バージョン",
   },
   en: {
     appName: "Study Tracker",
@@ -168,6 +176,10 @@ export const translations = {
     language: "Language",
     light: "Light",
     navy: "Navy",
+    theme_dog: "🐶 Dog",
+    theme_cat: "🐱 Cat",
+    theme_animal: "🦁 Safari",
+    theme_flower: "🌸 Flower",
     editSubjects: "Edit Subjects",
     addSubject: "Add",
     newSubjectPlaceholder: "New subject name...",
@@ -184,6 +196,10 @@ export const translations = {
     feedback: "Feedback",
     feedback_desc: "Help us improve the app",
     send_feedback: "Open Feedback Box",
+    termsOfService: "Terms of Service",
+    progressLabel: "Progress",
+    logout: "Logout",
+    version: "Version",
   }
 };
 

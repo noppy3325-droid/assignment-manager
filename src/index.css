@@ -56,6 +56,78 @@
     --m3-error-container: #93000a;
     --m3-on-error-container: #ffdad6;
   }
+
+  body.theme-dog {
+    --m3-primary: #8b5a2b;
+    --m3-on-primary: #ffffff;
+    --m3-primary-container: #f5e4cc;
+    --m3-on-primary-container: #422810;
+    --m3-surface: #fffefb;
+    --m3-on-surface: #3e2723;
+    --m3-surface-variant: #fdf5ea;
+    --m3-on-surface-variant: #6b5240;
+    --m3-surface-container-low: #fff8f0;
+    --m3-surface-container: #f9e1c9;
+    --m3-surface-container-high: #ebd2ba;
+    --m3-outline: #a38c7f;
+    --m3-outline-variant: #dccbcd;
+    background-image: radial-gradient(#8b5a2b11 1px, transparent 0);
+    background-size: 24px 24px;
+  }
+
+  body.theme-cat {
+    --m3-primary: #c26978;
+    --m3-on-primary: #ffffff;
+    --m3-primary-container: #ffd8df;
+    --m3-on-primary-container: #3d0012;
+    --m3-surface: #fffbfc;
+    --m3-on-surface: #312123;
+    --m3-surface-variant: #fdf2f4;
+    --m3-on-surface-variant: #5d4f52;
+    --m3-surface-container-low: #fcf4f5;
+    --m3-surface-container: #f7ebed;
+    --m3-surface-container-high: #f2e2e5;
+    --m3-outline: #968689;
+    --m3-outline-variant: #d4c2c6;
+    background-image: radial-gradient(#c2697811 1px, transparent 0);
+    background-size: 32px 32px;
+  }
+
+  body.theme-animal {
+    --m3-primary: #b16300;
+    --m3-on-primary: #ffffff;
+    --m3-primary-container: #ffdcbe;
+    --m3-on-primary-container: #2b1400;
+    --m3-surface: #fffcf8;
+    --m3-on-surface: #2b221a;
+    --m3-surface-variant: #fae2ce;
+    --m3-on-surface-variant: #564433;
+    --m3-surface-container-low: #fff8ee;
+    --m3-surface-container: #ffecd6;
+    --m3-surface-container-high: #fedbbc;
+    --m3-outline: #877461;
+    --m3-outline-variant: #d9c2ab;
+    background-image: linear-gradient(#b1630009 1px, transparent 1px), linear-gradient(90deg, #b1630009 1px, transparent 1px);
+    background-size: 40px 40px;
+  }
+
+  body.theme-flower {
+    --m3-primary: #9a4058;
+    --m3-on-primary: #ffffff;
+    --m3-primary-container: #ffd9e0;
+    --m3-on-primary-container: #3e0018;
+    --m3-surface: #fff8f8;
+    --m3-on-surface: #25191b;
+    --m3-surface-variant: #f4dddf;
+    --m3-on-surface-variant: #524345;
+    --m3-surface-container-low: #fcf1f2;
+    --m3-surface-container: #f9ebeb;
+    --m3-surface-container-high: #f4e0e1;
+    --m3-outline: #857375;
+    --m3-outline-variant: #d7c1c3;
+    background-image: radial-gradient(#9a405815 1.5px, transparent 0);
+    background-size: 24px 24px;
+  }
 }
 
 @layer base {

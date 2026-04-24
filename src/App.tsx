@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useMemo, useRef, useCallback } from 'react';
 import { motion, AnimatePresence, LayoutGroup } from 'motion/react';
-import { Plus, Calendar, BookOpen, CheckCircle2, Clock, ChevronRight, ChevronDown, X, Settings, LogOut, LogIn, Trash2, Sun, Moon, Zap, Play, Pause, Square, CheckSquare, Edit3, Coffee, Brain, Eye, EyeOff, AlertCircle } from 'lucide-react';
+import { Plus, Calendar, BookOpen, CheckCircle2, Clock, ChevronRight, ChevronDown, X, Settings, LogOut, LogIn, Trash2, Sun, Moon, Zap, Play, Pause, Square, CheckSquare, Edit3, Coffee, Brain, Eye, EyeOff, AlertCircle, Dog, Cat, Bird, TreePine, PawPrint, Rabbit, Flower } from 'lucide-react';
 import { format, differenceInDays, isPast, isToday, startOfDay, formatDistanceToNow } from 'date-fns';
 import { ja } from 'date-fns/locale';
 import { DayPicker } from 'react-day-picker';
@@ -123,17 +123,18 @@ const DEFAULT_SUBJECTS = [
   "世界史", "日本史", "地理", "現代社会", "倫理", "政治・経済", "情報", "その他"
 ];
 
-const APP_VERSION = '1.2.0';
+const APP_VERSION = '1.2.1';
 
 const RELEASE_NOTES = {
-  version: '1.2.0',
-  title: "🎉 アップデートのお知らせ (v1.2.0)",
+  version: '1.2.1',
+  title: "🎉 アップデートのお知らせ (v1.2.1)",
   features: {
     title: "✨ 新機能・改善点",
     items: [
-      "設定画面から「教科の並び替え」ができるようになりました",
-      "アーカイブ済み（履歴）タスクの「選択削除」に対応しました",
-      "タスク詳細画面に、直接進捗を変更できる「進捗を入力」機能を追加しました"
+      "新テーマ（いぬ、ねこ、サファリ、フラワー）を追加しました",
+      "UI/UXの全体的なブラッシュアップを行いました",
+      "テーマ切り替えUIをドロップダウン形式に改善しました",
+      "パフォーマンスの向上と軽微なバグの修正を行いました"
     ]
   }
 };
@@ -176,7 +177,6 @@ const TERMS_OF_SERVICE = {
 
 export default function App() {
   const [user, setUser] = useState<User | null>(null);
-  const [showUpdateModal, setShowUpdateModal] = useState(false);
   const [isAuthReady, setIsAuthReady] = useState(false);
   const [submissions, setSubmissions] = useState<Submission[]>([]);
   const [selectedId, setSelectedId] = useState<string | null>(null);
@@ -227,9 +227,9 @@ export default function App() {
     return (saved as Language) || 'ja';
   });
   const [modalPriority, setModalPriority] = useState<'low' | 'medium' | 'high'>('medium');
-  const [theme, setTheme] = useState<'light' | 'dark'>(() => {
+  const [theme, setTheme] = useState<'light' | 'dark' | 'dog' | 'cat' | 'animal' | 'flower'>(() => {
     const saved = localStorage.getItem('app-theme');
-    return (saved as 'light' | 'dark') || 'light';
+    return (saved as 'light' | 'dark' | 'dog' | 'cat' | 'animal' | 'flower') || 'light';
   });
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
   const [subjects, setSubjects] = useState<string[]>(() => {
@@ -239,6 +239,7 @@ export default function App() {
   const [newSubject, setNewSubject] = useState("");
   const [toastMessage, setToastMessage] = useState<string | null>(null);
   const [isFocusSelectorOpen, setIsFocusSelectorOpen] = useState(false);
+  const [isThemeDropdownOpen, setIsThemeDropdownOpen] = useState(false);
   const [deadlineTime, setDeadlineTime] = useState("23:59");
   
   // Handle subject reordering
@@ -300,19 +301,6 @@ export default function App() {
   };
 
   const t = translations[language];
-
-  // Update Notification Logic
-  useEffect(() => {
-    const savedVersion = localStorage.getItem('app-version');
-    if (savedVersion !== APP_VERSION) {
-      setShowUpdateModal(true);
-    }
-  }, []);
-
-  const closeUpdateModal = () => {
-    localStorage.setItem('app-version', APP_VERSION);
-    setShowUpdateModal(false);
-  };
 
   // Logic to load settings from Firestore upon login
   useEffect(() => {
@@ -400,10 +388,11 @@ export default function App() {
 
   // Apply theme to body
   useEffect(() => {
+    document.body.className = '';
     if (theme === 'dark') {
       document.body.classList.add('dark');
-    } else {
-      document.body.classList.remove('dark');
+    } else if (theme !== 'light') {
+      document.body.classList.add(`theme-${theme}`);
     }
     localStorage.setItem('app-theme', theme);
   }, [theme]);
@@ -631,12 +620,13 @@ export default function App() {
     const submission = submissions.find(s => s.id === activeTimerId);
     if (!submission) return;
 
-    // Validate increment based on task type
+    // Validate increment based on task type - Must be positive integer
     const isPagesValue = submission.taskType === 'pages';
     const maxIncrement = isPagesValue ? 999 : 100;
+    const isInteger = /^\d+$/.test(progressInputValue);
     
-    if (increment <= 0 || increment > maxIncrement) {
-      showToast(isPagesValue ? (language === 'ja' ? '正当なページ数を入力してください' : 'Enter a valid page count') : t.invalidProgressInput);
+    if (!isInteger || increment <= 0 || increment > maxIncrement) {
+      showToast(isPagesValue ? (language === 'ja' ? '正当な整数を入力してください' : 'Enter a valid positive integer') : t.invalidProgressInput);
       return;
     }
 
@@ -741,8 +731,12 @@ export default function App() {
     const description = formData.get('description') as string;
     const priority = formData.get('priority') as 'low' | 'medium' | 'high';
     const taskType = formData.get('taskType') as 'pages' | 'percentage';
-    const startPage = parseInt(formData.get('startPage') as string) || 0;
-    const endPage = parseInt(formData.get('endPage') as string) || 0;
+    const startPageRaw = formData.get('startPage') as string;
+    const endPageRaw = formData.get('endPage') as string;
+    
+    // Strict integer validation
+    const startPage = /^\d+$/.test(startPageRaw) ? parseInt(startPageRaw) : 0;
+    const endPage = /^\d+$/.test(endPageRaw) ? parseInt(endPageRaw) : 0;
     const dateValue = formData.get('deadlineDate') as string;
     const timeValue = formData.get('deadlineTime') as string || "23:59";
 
@@ -789,12 +783,28 @@ export default function App() {
     const progress = progressValue !== null ? (parseInt(progressValue as string) || 0) : editData.progress;
     const dateValue = formData.get('deadlineDate') as string;
     const timeValue = formData.get('deadlineTime') as string || "23:59";
+    const startPageStr = formData.get('startPage') as string;
+    const endPageStr = formData.get('endPage') as string;
 
     if (!title || !subject || !dateValue) return;
+
+    // Strict integer validation
+    const startPage = /^\d+$/.test(startPageStr) ? parseInt(startPageStr) : (editData.startPage || 0);
+    const endPage = /^\d+$/.test(endPageStr) ? parseInt(endPageStr) : (editData.endPage || 0);
 
     const [hours, minutes] = timeValue.split(':').map(Number);
     const [y, m, d] = dateValue.split('-').map(Number);
     const combinedDate = new Date(y, m - 1, d, hours, minutes, 0, 0);
+
+    const updatePayload: any = {
+      title, subject, description, priority, progress,
+      deadline: Timestamp.fromDate(combinedDate)
+    };
+
+    if (editData.taskType === 'pages') {
+      updatePayload.startPage = startPage;
+      updatePayload.endPage = endPage;
+    }
 
     const isCompleting = progress === 100 && editData.status !== 'completed';
     if (isCompleting) {
@@ -804,8 +814,7 @@ export default function App() {
         onConfirm: async () => {
           try {
             await updateDoc(doc(db, 'submissions', editData.id), {
-              title, subject, description, priority, progress,
-              deadline: Timestamp.fromDate(combinedDate),
+              ...updatePayload,
               status: 'completed',
               completedAt: editData.completedAt || serverTimestamp()
             });
@@ -825,8 +834,7 @@ export default function App() {
 
     try {
       await updateDoc(doc(db, 'submissions', editData.id), {
-        title, subject, description, priority, progress,
-        deadline: Timestamp.fromDate(combinedDate),
+        ...updatePayload,
         status: editData.status === 'completed' ? 'completed' : progress === 100 ? 'completed' : progress > 0 ? 'in-progress' : 'pending',
         completedAt: (progress === 100 || editData.status === 'completed') ? (editData.completedAt || serverTimestamp()) : null
       });
@@ -835,6 +843,31 @@ export default function App() {
     } catch (error) {
       handleFirestoreError(error, OperationType.UPDATE, `submissions/${editData.id}`);
     }
+  };
+
+  const deleteSubmission = async (id: string, e: React.MouseEvent) => {
+    e.stopPropagation();
+    const submission = submissions.find(s => s.id === id);
+    if (!submission) return;
+
+    setConfirmDialog({
+      title: language === 'ja' ? 'タスクを削除' : 'Delete Task',
+      message: language === 'ja' ? 'このタスクをゴミ箱に移動しますか？' : 'Move this task to trash?',
+      onConfirm: async () => {
+        try {
+          await updateDoc(doc(db, 'submissions', submission.id), {
+            isDeleted: true,
+            deletedAt: serverTimestamp()
+          });
+          setConfirmDialog(null);
+          setSelectedId(null);
+          showToast(language === 'ja' ? 'タスクを削除しました' : 'Task deleted');
+        } catch (error) {
+          handleFirestoreError(error, OperationType.UPDATE, `submissions/${submission.id}`);
+        }
+      },
+      onCancel: () => setConfirmDialog(null)
+    });
   };
 
   const toggleComplete = async (id: string, e: React.MouseEvent) => {
@@ -927,129 +960,93 @@ export default function App() {
       .slice(0, 3);
   }, [submissions]);
 
-  if (!isAuthReady) {
-    return (
-      <div className="min-h-screen flex items-center justify-center bg-slate-50">
+  const renderTermsModal = () => (
+    <AnimatePresence>
+      {showTermsModal && (
         <motion.div 
-          animate={{ rotate: 360 }}
-          transition={{ duration: 1, repeat: Infinity, ease: "linear" }}
-          className="w-8 h-8 border-4 border-ios-blue border-t-transparent rounded-full"
-        />
-      </div>
-    );
-  }
-
-  if (!user) {
-    return (
-      <div className="min-h-screen w-full flex flex-col items-center justify-center p-6 bg-[var(--m3-surface)]">
-        <motion.div 
-          initial={{ opacity: 0, scale: 0.9 }}
-          animate={{ opacity: 1, scale: 1 }}
-          className="max-w-md w-full m3-card text-center shadow-2xl overflow-hidden"
+          initial={{ opacity: 0 }}
+          animate={{ opacity: 1 }}
+          exit={{ opacity: 0 }}
+          className="fixed inset-0 z-[400] flex items-center justify-center p-4 sm:p-6 bg-black/60 backdrop-blur-md"
         >
-          <div className="p-10">
-            <div className="w-20 h-20 bg-[var(--m3-primary-container)] rounded-[24px] flex items-center justify-center mx-auto mb-8 text-[var(--m3-on-primary-container)] rotate-3">
-              <BookOpen className="w-10 h-10" />
+          <motion.div 
+            initial={{ scale: 0.9, opacity: 0, y: 20 }}
+            animate={{ scale: 1, opacity: 1, y: 0 }}
+            exit={{ scale: 0.9, opacity: 0, y: 20 }}
+            className="m3-card !bg-white w-full max-w-2xl max-h-[85vh] flex flex-col shadow-2xl relative overflow-hidden text-slate-900"
+          >
+            <div className="p-4 sm:p-5 border-b border-slate-200 shrink-0 bg-slate-50">
+              <h2 className="text-lg font-black text-slate-900 flex items-center gap-3">
+                <CheckSquare className="w-5 h-5 text-[var(--m3-primary)]" />
+                {language === 'ja' ? '利用規約' : 'Terms of Service'}
+              </h2>
             </div>
-            <h1 className="text-3xl font-black text-[var(--m3-on-surface)] mb-4 tracking-tight">{t.appName}</h1>
-            <p className="text-[var(--m3-on-surface-variant)] mb-10 leading-relaxed font-medium">
-              {language === 'ja' ? (
-                <>提出物を美しく管理しましょう。<br />Googleアカウントでログインして開始します。</>
-              ) : (
-                <>Manage your assignments beautifully.<br />Sign in with Google to get started.</>
-              )}
-            </p>
-            
-            <button 
-              onClick={() => {
-                if (isTermsAccepted) {
-                  login();
-                } else {
-                  setShowTermsModal(true);
+
+            <div 
+              onScroll={(e) => {
+                const target = e.currentTarget;
+                if (target.scrollHeight - target.scrollTop <= target.clientHeight + 20) {
+                  setHasScrolledToBottom(true);
                 }
               }}
-              className="w-full m3-button-primary py-6"
+              className="flex-1 overflow-y-auto p-5 sm:p-8 scrollbar-custom space-y-6 text-slate-800"
             >
-              <LogIn className="w-5 h-5" />
-              {language === 'ja' ? 'Googleでログイン' : 'Login with Google'}
-            </button>
-          </div>
-        </motion.div>
+              <div className="space-y-4">
+                <h3 className="text-lg font-black text-slate-900">{TERMS_OF_SERVICE.title}</h3>
+                <p className="text-sm font-semibold leading-relaxed whitespace-pre-wrap text-slate-700">
+                  {TERMS_OF_SERVICE.intro}
+                </p>
+              </div>
 
-        {/* Terms of Service Modal */}
-        <AnimatePresence>
-          {showTermsModal && (
-            <motion.div 
-              initial={{ opacity: 0 }}
-              animate={{ opacity: 1 }}
-              exit={{ opacity: 0 }}
-              className="fixed inset-0 z-[300] flex items-center justify-center p-4 sm:p-6 bg-black/60 backdrop-blur-md"
-            >
-              <motion.div 
-                initial={{ scale: 0.9, opacity: 0, y: 20 }}
-                animate={{ scale: 1, opacity: 1, y: 0 }}
-                exit={{ scale: 0.9, opacity: 0, y: 20 }}
-                className="m3-card !bg-white w-full max-w-2xl max-h-[85vh] flex flex-col shadow-2xl relative overflow-hidden text-slate-900"
-              >
-                <div className="p-4 sm:p-5 border-b border-slate-200 shrink-0 bg-slate-50">
-                  <h2 className="text-lg font-black text-slate-900 flex items-center gap-3">
-                    <CheckSquare className="w-5 h-5 text-[var(--m3-primary)]" />
-                    {language === 'ja' ? '利用規約' : 'Terms of Service'}
-                  </h2>
-                </div>
+              <div className="space-y-4">
+                <h3 className="text-base font-black flex items-center gap-2 text-slate-900">
+                   {TERMS_OF_SERVICE.features.title}
+                </h3>
+                <ul className="space-y-3">
+                  {TERMS_OF_SERVICE.features.items.map((item, idx) => (
+                    <li key={idx} className="flex gap-3 text-sm font-bold text-slate-700">
+                      <div className="mt-1.5 w-1.5 h-1.5 rounded-full bg-[var(--m3-primary)] shrink-0" />
+                      {item}
+                    </li>
+                  ))}
+                </ul>
+              </div>
 
-                <div 
-                  onScroll={(e) => {
-                    const target = e.currentTarget;
-                    if (target.scrollHeight - target.scrollTop <= target.clientHeight + 20) {
-                      setHasScrolledToBottom(true);
-                    }
-                  }}
-                  className="flex-1 overflow-y-auto p-5 sm:p-8 scrollbar-custom space-y-6 text-slate-800"
-                >
-                  <div className="space-y-4">
-                    <h3 className="text-lg font-black text-slate-900">{TERMS_OF_SERVICE.title}</h3>
-                    <p className="text-sm font-semibold leading-relaxed whitespace-pre-wrap text-slate-700">
-                      {TERMS_OF_SERVICE.intro}
+              <div className="space-y-6 pt-6 border-t border-slate-100">
+                <h3 className="text-lg font-black text-slate-900">{TERMS_OF_SERVICE.terms.title}</h3>
+                <p className="text-xs font-bold text-slate-500 italic">{TERMS_OF_SERVICE.terms.intro}</p>
+                
+                {TERMS_OF_SERVICE.terms.sections.map((section, idx) => (
+                  <div key={idx} className="space-y-2">
+                    <h4 className="text-sm font-black text-[var(--m3-primary)]">{section.title}</h4>
+                    <p className="text-sm font-semibold leading-relaxed text-slate-700 whitespace-pre-wrap">
+                      {section.content}
                     </p>
                   </div>
+                ))}
+              </div>
 
-                  <div className="space-y-4">
-                    <h3 className="text-base font-black flex items-center gap-2 text-slate-900">
-                       {TERMS_OF_SERVICE.features.title}
-                    </h3>
-                    <ul className="space-y-3">
-                      {TERMS_OF_SERVICE.features.items.map((item, idx) => (
-                        <li key={idx} className="flex gap-3 text-sm font-bold text-slate-700">
-                          <div className="mt-1.5 w-1.5 h-1.5 rounded-full bg-[var(--m3-primary)] shrink-0" />
-                          {item}
-                        </li>
-                      ))}
-                    </ul>
-                  </div>
+              <div className="p-4 rounded-2xl bg-slate-50 border border-slate-200">
+                <p className="text-xs font-black leading-relaxed text-[var(--m3-primary)] text-center">
+                  {TERMS_OF_SERVICE.terms.footer}
+                </p>
+              </div>
+            </div>
 
-                  <div className="space-y-6 pt-6 border-t border-slate-100">
-                    <h3 className="text-lg font-black text-slate-900">{TERMS_OF_SERVICE.terms.title}</h3>
-                    <p className="text-xs font-bold text-slate-500 italic">{TERMS_OF_SERVICE.terms.intro}</p>
-                    
-                    {TERMS_OF_SERVICE.terms.sections.map((section, idx) => (
-                      <div key={idx} className="space-y-2">
-                        <h4 className="text-sm font-black text-[var(--m3-primary)]">{section.title}</h4>
-                        <p className="text-sm font-semibold leading-relaxed text-slate-700 whitespace-pre-wrap">
-                          {section.content}
-                        </p>
-                      </div>
-                    ))}
-                  </div>
-
-                  <div className="p-4 rounded-2xl bg-slate-50 border border-slate-200">
-                    <p className="text-xs font-black leading-relaxed text-[var(--m3-primary)] text-center">
-                      {TERMS_OF_SERVICE.terms.footer}
-                    </p>
-                  </div>
+            <div className="p-4 sm:p-6 bg-slate-50 border-t border-slate-200 space-y-3 shrink-0">
+              {user ? (
+                <div className="flex justify-end gap-3">
+                  <button 
+                    onClick={() => {
+                      setShowTermsModal(false);
+                    }}
+                    className="px-6 py-3 rounded-2xl bg-[var(--m3-primary)] text-white font-bold transform active:scale-95 transition-all shadow-md"
+                  >
+                    {language === 'ja' ? '閉じる' : 'Close'}
+                  </button>
                 </div>
-
-                <div className="p-4 sm:p-6 bg-slate-50 border-t border-slate-200 space-y-3 shrink-0">
+              ) : (
+                <>
                   <div className="flex flex-col items-center gap-3">
                     <button 
                       disabled={!hasScrolledToBottom}
@@ -1104,98 +1101,175 @@ export default function App() {
                       {language === 'ja' ? '最後までスクロールして同意してください' : 'Please scroll to the bottom to agree'}
                     </p>
                   )}
-                </div>
-              </motion.div>
-            </motion.div>
-          )}
-        </AnimatePresence>
+                </>
+              )}
+            </div>
+          </motion.div>
+        </motion.div>
+      )}
+    </AnimatePresence>
+  );
+
+  if (!isAuthReady) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-slate-50">
+        <motion.div 
+          animate={{ rotate: 360 }}
+          transition={{ duration: 1, repeat: Infinity, ease: "linear" }}
+          className="w-8 h-8 border-4 border-ios-blue border-t-transparent rounded-full"
+        />
+      </div>
+    );
+  }
+
+  if (!user) {
+    return (
+      <div className="min-h-screen w-full flex flex-col items-center justify-center p-6 bg-[var(--m3-surface)]">
+        <motion.div 
+          initial={{ opacity: 0, scale: 0.9 }}
+          animate={{ opacity: 1, scale: 1 }}
+          className="max-w-md w-full m3-card text-center shadow-2xl overflow-hidden"
+        >
+          <div className="p-10">
+            <div className="w-20 h-20 bg-[var(--m3-primary-container)] rounded-[24px] flex items-center justify-center mx-auto mb-8 text-[var(--m3-on-primary-container)] rotate-3">
+              <BookOpen className="w-10 h-10" />
+            </div>
+            <h1 className="text-3xl font-black text-[var(--m3-on-surface)] mb-4 tracking-tight">{t.appName}</h1>
+            <p className="text-[var(--m3-on-surface-variant)] mb-10 leading-relaxed font-medium">
+              {language === 'ja' ? (
+                <>提出物を美しく管理しましょう。<br />Googleアカウントでログインして開始します。</>
+              ) : (
+                <>Manage your assignments beautifully.<br />Sign in with Google to get started.</>
+              )}
+            </p>
+            
+            <button 
+              onClick={() => {
+                if (isTermsAccepted) {
+                  login();
+                } else {
+                  setShowTermsModal(true);
+                }
+              }}
+              className="w-full m3-button-primary py-6"
+            >
+              <LogIn className="w-5 h-5" />
+              {language === 'ja' ? 'Googleでログイン' : 'Login with Google'}
+            </button>
+          </div>
+        </motion.div>
+        {renderTermsModal()}
       </div>
     );
   }
 
   return (
     <div className="relative min-h-screen w-full overflow-hidden bg-[var(--m3-surface)] text-[var(--m3-on-surface)]">
-      {/* Update Notification Modal */}
-      <AnimatePresence>
-        {showUpdateModal && (
-          <motion.div 
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            exit={{ opacity: 0 }}
-            className="fixed inset-0 z-[200] flex items-center justify-center p-4 sm:p-6 bg-black/40 backdrop-blur-md"
-          >
-            <motion.div 
-              initial={{ scale: 0.9, opacity: 0, y: 20 }}
-              animate={{ scale: 1, opacity: 1, y: 0 }}
-              exit={{ scale: 0.9, opacity: 0, y: 20 }}
-              className="m3-card !bg-[var(--m3-surface-container-high)] w-full max-w-md p-8 shadow-2xl relative overflow-hidden"
+      {/* Theme Background Watermarks */}
+      {theme === 'dog' && (
+        <>
+          <div className="fixed inset-0 pointer-events-none z-0 overflow-hidden opacity-[0.06] text-[var(--m3-primary)] mix-blend-multiply flex items-center justify-center">
+            <motion.div
+              animate={{ rotate: [-2, 2, -2], x: [-10, 10, -10] }}
+              transition={{ duration: 15, repeat: Infinity, ease: "linear" }}
             >
-              <div className="absolute top-0 right-0 p-8 opacity-5">
-                <Zap className="w-32 h-32 text-[var(--m3-primary)]" />
-              </div>
-              <div className="relative space-y-6 text-left">
-                <div className="flex items-center gap-4">
-                  <div className="w-12 h-12 rounded-2xl bg-[var(--m3-primary)]/10 flex items-center justify-center">
-                    <Zap className="w-6 h-6 text-[var(--m3-primary)]" />
-                  </div>
-                  <div>
-                    <h2 className="text-xl font-black text-[var(--m3-on-surface)]">
-                      {language === 'ja' ? 'アップデートのお知らせ' : 'Update Notice'}
-                    </h2>
-                    <div className="text-xs font-black text-[var(--m3-primary)] uppercase tracking-widest">Version {APP_VERSION}</div>
-                  </div>
-                </div>
-
-                <div className="space-y-4 py-2">
-                  <h3 className="text-sm font-black text-[var(--m3-on-surface-variant)] uppercase tracking-wider px-1">
-                    {language === 'ja' ? '主な変更点' : 'Latest Changes'}
-                  </h3>
-                  <ul className="space-y-3">
-                    {[
-                      { 
-                        ja: '12インチHD解像度クロームブック向けに表示サイズを最適化', 
-                        en: 'Optimized display scaling for 12-inch HD Chromebooks' 
-                      },
-                      { 
-                        ja: '視認性向上のため、全体的なフォントサイズを調整', 
-                        en: 'Adjusted global font sizes for better legibility' 
-                      },
-                      { 
-                        ja: '利用規約モーダルの表示領域を拡大', 
-                        en: 'Expanded content area in the Terms of Service modal' 
-                      },
-                      { 
-                        ja: 'ドラッグ＆ドロップによる教科の並び替え機能を改善', 
-                        en: 'Improved subject reordering via drag & drop' 
-                      }
-                    ].map((item, idx) => (
-                      <motion.li 
-                        key={idx}
-                        initial={{ x: -10, opacity: 0 }}
-                        animate={{ x: 0, opacity: 1 }}
-                        transition={{ delay: 0.1 * idx }}
-                        className="flex items-start gap-3"
-                      >
-                        <div className="mt-1.5 w-1.5 h-1.5 rounded-full bg-[var(--m3-primary)] shrink-0" />
-                        <span className="text-sm font-bold text-[var(--m3-on-surface)] leading-relaxed">
-                          {language === 'ja' ? item.ja : item.en}
-                        </span>
-                      </motion.li>
-                    ))}
-                  </ul>
-                </div>
-
-                <button 
-                  onClick={closeUpdateModal}
-                  className="w-full m3-button-primary mt-4"
-                >
-                  {language === 'ja' ? '確認しました' : 'Got it!'}
-                </button>
-              </div>
+              <Dog className="w-[120vw] h-[120vh] -rotate-12 translate-x-1/4 translate-y-1/4 stroke-[0.3]" />
             </motion.div>
+          </div>
+          <motion.div 
+            animate={{ y: [0, -15, 0], rotate: [12, 15, 12] }}
+            transition={{ duration: 6, repeat: Infinity, ease: "easeInOut" }}
+            className="fixed top-20 right-[10%] opacity-[0.08] pointer-events-none z-0 scale-150"
+          >
+            <Dog className="w-40 h-40" />
           </motion.div>
-        )}
-      </AnimatePresence>
+          <motion.div 
+            animate={{ x: [0, 10, 0], rotate: [-45, -40, -45] }}
+            transition={{ duration: 8, repeat: Infinity, ease: "easeInOut" }}
+            className="fixed bottom-40 left-[5%] opacity-[0.08] pointer-events-none z-0"
+          >
+            <PawPrint className="w-32 h-32" />
+          </motion.div>
+        </>
+      )}
+      {theme === 'cat' && (
+        <>
+          <div className="fixed inset-0 pointer-events-none z-0 overflow-hidden opacity-[0.06] text-[var(--m3-primary)] mix-blend-multiply flex items-center justify-center">
+            <motion.div
+              animate={{ rotate: [2, -2, 2], y: [-10, 10, -10] }}
+              transition={{ duration: 20, repeat: Infinity, ease: "linear" }}
+            >
+              <Cat className="w-[120vw] h-[120vh] rotate-12 translate-x-1/4 translate-y-1/4 stroke-[0.3]" />
+            </motion.div>
+          </div>
+          <motion.div 
+            animate={{ scale: [1, 1.1, 1], rotate: [-12, -15, -12] }}
+            transition={{ duration: 7, repeat: Infinity, ease: "easeInOut" }}
+            className="fixed top-40 left-[15%] opacity-[0.08] pointer-events-none z-0"
+          >
+            <Cat className="w-48 h-48" />
+          </motion.div>
+          <motion.div 
+            animate={{ y: [0, -20, 0], rotate: [45, 50, 45] }}
+            transition={{ duration: 10, repeat: Infinity, ease: "easeInOut" }}
+            className="fixed bottom-20 right-[8%] opacity-[0.08] pointer-events-none z-0"
+          >
+            <PawPrint className="w-24 h-24" />
+          </motion.div>
+        </>
+      )}
+      {theme === 'animal' && (
+        <>
+          <div className="fixed inset-0 pointer-events-none z-0 overflow-hidden opacity-[0.06] text-[var(--m3-primary)] mix-blend-multiply flex items-center justify-center">
+            <motion.div
+              animate={{ x: [-20, 20, -20] }}
+              transition={{ duration: 25, repeat: Infinity, ease: "linear" }}
+            >
+              <Rabbit className="w-[120vw] h-[120vh] -rotate-12 translate-x-1/4 translate-y-1/4 stroke-[0.3]" />
+            </motion.div>
+          </div>
+          <motion.div 
+            animate={{ y: [0, -10, 0] }}
+            transition={{ duration: 4, repeat: Infinity, ease: "easeInOut" }}
+            className="fixed top-1/4 right-[5%] opacity-[0.08] pointer-events-none z-0 rotate-12"
+          >
+            <Rabbit className="w-56 h-56" />
+          </motion.div>
+          <motion.div 
+            animate={{ scale: [1, 1.2, 1] }}
+            transition={{ duration: 12, repeat: Infinity, ease: "linear" }}
+            className="fixed bottom-1/4 left-[10%] opacity-[0.08] pointer-events-none z-0 -rotate-12"
+          >
+            <Bird className="w-32 h-32" />
+          </motion.div>
+        </>
+      )}
+      {theme === 'flower' && (
+        <>
+          <div className="fixed inset-0 pointer-events-none z-0 overflow-hidden opacity-[0.1] text-[var(--m3-primary)] mix-blend-multiply flex items-center justify-center">
+            <motion.div
+              animate={{ scale: [1, 1.05, 1], rotate: [-1, 1, -1] }}
+              transition={{ duration: 30, repeat: Infinity, ease: "linear" }}
+            >
+              <Flower className="w-[120vw] h-[120vh] rotate-12 translate-x-1/4 translate-y-1/4 stroke-[0.3]" />
+            </motion.div>
+          </div>
+          <motion.div 
+            animate={{ skewX: [-2, 2, -2] }}
+            transition={{ duration: 5, repeat: Infinity, ease: "easeInOut" }}
+            className="fixed top-10 left-[20%] opacity-[0.14] pointer-events-none z-0"
+          >
+            <Flower className="w-40 h-40" />
+          </motion.div>
+          <motion.div 
+            animate={{ rotate: [-3, 3, -3] }}
+            transition={{ duration: 8, repeat: Infinity, ease: "easeInOut" }}
+            className="fixed bottom-60 right-[15%] opacity-[0.14] pointer-events-none z-0"
+          >
+            <Flower className="w-32 h-32" />
+          </motion.div>
+        </>
+      )}
 
       <div className="max-w-[1440px] mx-auto h-screen flex flex-col p-3 sm:p-5 lg:p-6">
         {/* Header */}
@@ -1204,11 +1278,28 @@ export default function App() {
             initial={{ opacity: 0, x: -20 }}
             animate={{ opacity: 1, x: 0 }}
             transition={{ duration: 0.4, ease: "easeOut" }}
+            className="flex items-center gap-3 sm:gap-4"
           >
-            <h1 className="text-xl sm:text-2xl font-bold tracking-tight">{t.appName}</h1>
-            <p className="text-xs text-[var(--m3-on-surface-variant)] mt-0.5 font-medium">
-              {format(new Date(), language === 'ja' ? 'M月d日 (EEEE)' : 'MMMM d (EEEE)', { locale: language === 'ja' ? ja : undefined })}
-            </p>
+            <div className="w-10 h-10 sm:w-12 sm:h-12 rounded-2xl bg-[var(--m3-primary)] flex items-center justify-center text-[var(--m3-on-primary)] shadow-lg shadow-[var(--m3-primary)]/20 overflow-hidden relative">
+              {theme === 'dog' ? <Dog className="w-6 h-6 sm:w-7 sm:h-7" /> :
+               theme === 'cat' ? <Cat className="w-6 h-6 sm:w-7 sm:h-7" /> :
+               theme === 'animal' ? <Rabbit className="w-6 h-6 sm:w-7 sm:h-7" /> :
+               theme === 'flower' ? <Flower className="w-6 h-6 sm:w-7 sm:h-7" /> :
+               <Zap className="w-6 h-6 sm:w-7 sm:h-7" />}
+               <motion.div 
+                 animate={{ rotate: 360 }} 
+                 transition={{ duration: 8, repeat: Infinity, ease: "linear" }}
+                 className="absolute inset-0 opacity-10"
+               >
+                 <PawPrint className="w-full h-full p-2" />
+               </motion.div>
+            </div>
+            <div>
+              <h1 className="text-xl sm:text-2xl font-black tracking-tight text-[var(--m3-on-surface)]">{t.appName}</h1>
+              <p className="text-[10px] sm:text-xs text-[var(--m3-on-surface-variant)]/60 mt-0.5 font-black uppercase tracking-widest leading-none">
+                {format(new Date(), language === 'ja' ? 'M月d日 (EEEE)' : 'MMMM d (EEEE)', { locale: language === 'ja' ? ja : undefined })}
+              </p>
+            </div>
           </motion.div>
           <motion.div 
             initial={{ opacity: 0, x: 20 }}
@@ -1226,7 +1317,7 @@ export default function App() {
             <button 
               onClick={logout}
               className="p-3 rounded-full hover:bg-[var(--m3-error-container)]/50 text-[var(--m3-on-surface-variant)] hover:text-[var(--m3-error)] transition-all active:scale-95"
-              title="Logout"
+              title={t.logout}
             >
               <LogOut className="w-5 h-5 sm:w-6 sm:h-6" />
             </button>
@@ -1347,8 +1438,8 @@ export default function App() {
           {/* Main Content */}
       <main className="flex-1 overflow-y-auto pb-24 lg:pb-20 lg:pr-2">
         {/* Subject Filter Bar */}
-        <div className="mb-4 overflow-x-auto no-scrollbar py-1">
-          <div className="flex gap-2 min-w-max px-2">
+        <div className="mb-4 py-1">
+          <div className="flex flex-wrap gap-2 px-2">
             <button
               onClick={() => setSubjectFilter(null)}
               className={cn(
@@ -1501,7 +1592,7 @@ export default function App() {
                     transition={{ duration: 0.3, ease: "easeOut" }}
                     className={cn(
                       "grid gap-4 sm:gap-6",
-                      activeTab === 'history' ? "grid-cols-1 md:grid-cols-2" : "grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4"
+                      activeTab === 'history' ? "grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4" : "grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4"
                     )}
                   >
                     <AnimatePresence mode="popLayout" initial={false}>
@@ -1520,6 +1611,7 @@ export default function App() {
                                 submission={submission} 
                                 isHistoryView={activeTab === 'history'}
                                 language={language}
+                                theme={theme}
                                 isSelectionMode={isSelectionMode}
                                 isSelected={selectedArchiveIds.has(submission.id)}
                                 onToggleSelect={(e) => {
@@ -1592,12 +1684,20 @@ export default function App() {
               <motion.div 
                 layout
                 transition={{ duration: 0.3, ease: "easeOut" }}
-                initial={{ opacity: 0 }}
-                animate={{ opacity: 0.4 }}
-                className="h-full flex flex-col items-center justify-center text-center py-20"
+                initial={{ opacity: 0, scale: 0.9 }}
+                animate={{ opacity: 1, scale: 1 }}
+                className="h-full flex flex-col items-center justify-center text-center py-24 px-6 relative"
               >
-                <BookOpen className="w-16 h-16 mb-4" />
-                <p className="font-bold">{t.noTasks}</p>
+                <div className="relative group">
+                  <div className="absolute -inset-8 bg-[var(--m3-primary)]/5 rounded-full blur-2xl group-hover:bg-[var(--m3-primary)]/10 transition-all duration-700" />
+                  {theme === 'dog' ? <Dog className="w-24 h-24 mb-6 text-[var(--m3-primary)]/40 relative z-10 animate-bounce" /> :
+                   theme === 'cat' ? <Cat className="w-24 h-24 mb-6 text-[var(--m3-primary)]/40 relative z-10 animate-pulse" /> :
+                   theme === 'animal' ? <Rabbit className="w-24 h-24 mb-6 text-[var(--m3-primary)]/40 relative z-10 animate-bounce" /> :
+                   theme === 'flower' ? <Flower className="w-24 h-24 mb-6 text-[var(--m3-primary)]/40 relative z-10 animate-pulse" /> :
+                   <BookOpen className="w-20 h-20 mb-6 text-[var(--m3-primary)]/30 relative z-10" />}
+                </div>
+                <p className="font-black text-lg text-[var(--m3-on-surface-variant)]/60 uppercase tracking-widest">{t.noTasks}</p>
+                <p className="text-sm font-bold text-[var(--m3-on-surface-variant)]/40 mt-2">{language === 'ja' ? '新しいタスクを追加してください' : 'Add a new task to get started'}</p>
               </motion.div>
             )}
           </motion.div>
@@ -1650,47 +1750,73 @@ export default function App() {
 
             <div className="space-y-3">
               <label className="text-xs font-black text-[var(--m3-on-surface-variant)] uppercase tracking-[0.2em] px-1">{t.theme}</label>
-              <div className="segmented-control">
+              <div className="relative">
                 <button 
-                  onClick={() => setTheme('light')}
-                  className={cn("segmented-item", theme === 'light' ? "segmented-item-active" : "segmented-item-inactive")}
+                  onClick={() => setIsThemeDropdownOpen(!isThemeDropdownOpen)}
+                  className="w-full px-4 py-3 rounded-2xl bg-[var(--m3-surface-container)] border border-[var(--m3-outline)]/10 flex items-center justify-between font-bold text-sm hover:bg-[var(--m3-surface-container-high)] transition-all"
                 >
-                  <Sun className="w-4 h-4" />
-                  {t.light}
+                  <div className="flex items-center gap-3">
+                    {theme === 'light' && <Sun className="w-5 h-5 text-orange-500" />}
+                    {theme === 'dark' && <Moon className="w-5 h-5 text-indigo-400" />}
+                    {theme === 'dog' && <Dog className="w-5 h-5 text-[#8b5a2b]" />}
+                    {theme === 'cat' && <Cat className="w-5 h-5 text-[#c26978]" />}
+                    {theme === 'animal' && <Rabbit className="w-5 h-5 text-[#b16300]" />}
+                    {theme === 'flower' && <Flower className="w-5 h-5 text-[#9a4058]" />}
+                    <span>
+                      {theme === 'light' ? t.light : 
+                       theme === 'dark' ? t.navy : 
+                       theme === 'dog' ? t.theme_dog : 
+                       theme === 'cat' ? t.theme_cat : 
+                       theme === 'animal' ? t.theme_animal : 
+                       theme === 'flower' ? t.theme_flower : ''}
+                    </span>
+                  </div>
+                  <ChevronDown className={cn("w-5 h-5 transition-transform duration-300", isThemeDropdownOpen ? "rotate-180" : "")} />
                 </button>
-                <button 
-                  onClick={() => setTheme('dark')}
-                  className={cn("segmented-item", theme === 'dark' ? "segmented-item-active" : "segmented-item-inactive")}
-                >
-                  <Moon className="w-4 h-4" />
-                  {t.navy}
-                </button>
-              </div>
-            </div>
-            <div className="space-y-4 py-4 border-t border-[var(--m3-outline)]/10">
-              <label className="text-xs font-black text-[var(--m3-on-surface-variant)] uppercase tracking-[0.2em] px-1">{t.pomodoro}</label>
-              <div className="grid grid-cols-2 gap-4">
-                <div className="space-y-1">
-                  <label className="text-xs font-bold text-[var(--m3-on-surface-variant)] uppercase tracking-widest">{t.focusTime} (m)</label>
-                  <input 
-                    type="number"
-                    value={pomodoroDurations.work / 60}
-                    onChange={(e) => setPomodoroDurations(prev => ({ ...prev, work: parseInt(e.target.value) * 60 || 0 }))}
-                    className="w-full px-4 py-2 rounded-xl bg-[var(--m3-surface-container)] border border-[var(--m3-outline)]/10 focus:outline-none focus:ring-4 focus:ring-[var(--m3-primary)]/10 text-sm font-bold text-[var(--m3-on-surface)] transition-all"
-                  />
-                </div>
-                <div className="space-y-1">
-                  <label className="text-xs font-bold text-[var(--m3-on-surface-variant)] uppercase tracking-widest">{t.breakTime} (m)</label>
-                  <input 
-                    type="number"
-                    value={pomodoroDurations.break / 60}
-                    onChange={(e) => setPomodoroDurations(prev => ({ ...prev, break: parseInt(e.target.value) * 60 || 0 }))}
-                    className="w-full px-4 py-2 rounded-xl bg-[var(--m3-surface-container)] border border-[var(--m3-outline)]/10 focus:outline-none focus:ring-4 focus:ring-[var(--m3-primary)]/10 text-sm font-bold text-[var(--m3-on-surface)] transition-all"
-                  />
-                </div>
-              </div>
-            </div>
 
+                <AnimatePresence>
+                  {isThemeDropdownOpen && (
+                    <>
+                      <div 
+                        className="fixed inset-0 z-40" 
+                        onClick={() => setIsThemeDropdownOpen(false)}
+                      />
+                      <motion.div 
+                        initial={{ opacity: 0, y: -10, scale: 0.95 }}
+                        animate={{ opacity: 1, y: 5, scale: 1 }}
+                        exit={{ opacity: 0, y: -10, scale: 0.95 }}
+                        className="absolute z-50 top-full left-0 right-0 bg-[var(--m3-surface-container-high)] rounded-2xl shadow-xl border border-[var(--m3-outline)]/10 overflow-hidden py-1"
+                      >
+                        {[
+                          { id: 'light', icon: Sun, label: t.light, color: 'text-orange-500' },
+                          { id: 'dark', icon: Moon, label: t.navy, color: 'text-indigo-400' },
+                          { id: 'dog', icon: Dog, label: t.theme_dog, color: 'text-[#8b5a2b]' },
+                          { id: 'cat', icon: Cat, label: t.theme_cat, color: 'text-[#c26978]' },
+                          { id: 'animal', icon: Rabbit, label: t.theme_animal, color: 'text-[#b16300]' },
+                          { id: 'flower', icon: Flower, label: t.theme_flower, color: 'text-[#9a4058]' }
+                        ].map((th) => (
+                          <button
+                            key={th.id}
+                            onClick={() => {
+                              setTheme(th.id as any);
+                              setIsThemeDropdownOpen(false);
+                            }}
+                            className={cn(
+                              "w-full px-4 py-3 flex items-center gap-3 text-left font-bold text-sm hover:bg-[var(--m3-primary)]/10 transition-colors",
+                              theme === th.id ? "text-[var(--m3-primary)] bg-[var(--m3-primary)]/5" : "text-[var(--m3-on-surface)]"
+                            )}
+                          >
+                            <th.icon className={cn("w-5 h-5", th.color)} />
+                            {th.label}
+                          </button>
+                        ))}
+                      </motion.div>
+                    </>
+                  )}
+                </AnimatePresence>
+              </div>
+            </div>
+            
             <div className="space-y-4 pt-4 border-t border-[var(--m3-outline)]/10">
               <div className="flex flex-col gap-1">
                 <label className="text-xs font-bold text-[var(--m3-on-surface-variant)] uppercase tracking-wider">{t.editSubjects}</label>
@@ -1741,15 +1867,21 @@ export default function App() {
                       if (!subjects.includes(newSubject.trim())) {
                         setSubjects([...subjects, newSubject.trim()]);
                         setNewSubject("");
+                      } else {
+                        showToast(language === 'ja' ? 'その教科は既に存在します' : 'Subject already exists');
                       }
                     }
                   }}
                 />
                 <button 
                   onClick={() => {
-                    if (newSubject.trim() && !subjects.includes(newSubject.trim())) {
-                      setSubjects([...subjects, newSubject.trim()]);
-                      setNewSubject("");
+                    if (newSubject.trim()) {
+                      if (!subjects.includes(newSubject.trim())) {
+                        setSubjects([...subjects, newSubject.trim()]);
+                        setNewSubject("");
+                      } else {
+                        showToast(language === 'ja' ? 'その教科は既に存在します' : 'Subject already exists');
+                      }
                     }
                   }}
                   className="px-4 py-3 rounded-xl bg-[var(--m3-primary)] text-[var(--m3-on-primary)] font-bold text-xs"
@@ -1781,8 +1913,17 @@ export default function App() {
                 {t.license_desc}<br />
                 © 2026 Lumina Project
               </p>
+              <button 
+                onClick={() => {
+                  setIsSettingsOpen(false);
+                  setShowTermsModal(true);
+                }}
+                className="mt-3 text-xs font-bold text-[var(--m3-primary)] hover:underline"
+              >
+                {t.termsOfService}
+              </button>
               <div className="mt-4 text-[11px] font-mono text-[var(--m3-on-surface-variant)]/30">
-                Version {APP_VERSION}
+                {t.version} {APP_VERSION}
               </div>
             </div>
           </div>
@@ -1808,20 +1949,29 @@ export default function App() {
             />
             <motion.div 
               layoutId={selectedId}
-              transition={{ duration: 0.2, ease: "easeOut" }}
+              transition={{ layout: { duration: 0.3, type: "spring", stiffness: 300, damping: 30 } }}
               className="relative w-full max-w-lg m3-card !p-0 shadow-2xl border border-[var(--m3-outline)]/10 bg-[var(--m3-surface-container-high)] max-h-[90vh] overflow-hidden flex flex-col"
             >
               <div className="flex-1 overflow-y-auto p-6 sm:p-10 scrollbar-custom">
-                <div className="flex items-center gap-2">
+                <div className="flex items-center justify-between">
                   <motion.div layoutId={`subject-${selectedId}`} className="text-sm font-bold uppercase tracking-widest text-[var(--m3-primary)]">
                     {selectedSubmission.subject}
                   </motion.div>
-                  <button 
-                    onClick={() => setSelectedId(null)}
-                    className="p-2 rounded-full hover:bg-[var(--m3-surface-container)] transition-colors"
-                  >
-                    <X className="w-5 h-5 text-[var(--m3-on-surface-variant)]" />
-                  </button>
+                  <div className="flex items-center gap-1">
+                    <button
+                      onClick={(e) => deleteSubmission(selectedSubmission.id, e as any)}
+                      className="p-2 rounded-full hover:bg-[var(--m3-error)]/10 text-[var(--m3-on-surface-variant)] hover:text-[var(--m3-error)] transition-colors"
+                      title={t.delete}
+                    >
+                      <Trash2 className="w-5 h-5" />
+                    </button>
+                    <button 
+                      onClick={() => setSelectedId(null)}
+                      className="p-2 rounded-full hover:bg-[var(--m3-surface-container)] transition-colors"
+                    >
+                      <X className="w-5 h-5 text-[var(--m3-on-surface-variant)]" />
+                    </button>
+                  </div>
                 </div>
                 
                 <motion.h2 layoutId={`title-${selectedId}`} className="text-2xl font-bold text-[var(--m3-on-surface)] mb-6 leading-tight">
@@ -1898,46 +2048,52 @@ export default function App() {
                   </div>
 
                   <div className="flex flex-col gap-2.5">
-                    <button 
-                      onClick={() => setIsFocusSelectorOpen(true)}
-                      className="w-full flex items-center justify-center gap-2 px-4 py-3.5 rounded-2xl font-bold transition-all active:scale-[0.98] bg-transparent border border-[var(--m3-primary)]/20 text-[var(--m3-primary)] hover:bg-[var(--m3-primary)]/5"
-                    >
-                      <Zap className="w-5 h-5" />
-                      {t.startTimer}
-                    </button>
+                    {selectedSubmission.status !== 'completed' && !selectedSubmission.isDeleted && (
+                      <>
+                        <button 
+                          onClick={() => setIsFocusSelectorOpen(true)}
+                          className="w-full flex items-center justify-center gap-2 px-4 py-3.5 rounded-2xl font-bold transition-all active:scale-[0.98] bg-transparent border border-[var(--m3-primary)]/20 text-[var(--m3-primary)] hover:bg-[var(--m3-primary)]/5"
+                        >
+                          <Zap className="w-5 h-5" />
+                          {t.startTimer}
+                        </button>
+                        
+                        <button 
+                          onClick={() => {
+                            setActiveTimerId(selectedSubmission.id);
+                            setTimerSeconds(0);
+                            setIsTimerRunning(false);
+                            setIsTimerPaused(false);
+                            setShowProgressInput(true);
+                            setProgressInputValue("");
+                            setSelectedId(null);
+                          }}
+                          className="w-full flex items-center justify-center gap-2 px-4 py-3.5 rounded-2xl font-bold transition-all active:scale-[0.98] border-none bg-[var(--m3-primary)]/15 text-[var(--m3-primary)] hover:bg-[var(--m3-primary)]/25"
+                        >
+                          <CheckSquare className="w-5 h-5" />
+                          {t.progressUpdate}
+                        </button>
+                      </>
+                    )}
                     
-                    <button 
-                      onClick={() => {
-                        setActiveTimerId(selectedSubmission.id);
-                        setTimerSeconds(0);
-                        setIsTimerRunning(false);
-                        setIsTimerPaused(false);
-                        setShowProgressInput(true);
-                        setProgressInputValue("");
-                        setSelectedId(null);
-                      }}
-                      className="w-full flex items-center justify-center gap-2 px-4 py-3.5 rounded-2xl font-bold transition-all active:scale-[0.98] border-none bg-[var(--m3-primary)]/15 text-[var(--m3-primary)] hover:bg-[var(--m3-primary)]/25"
-                    >
-                      <CheckSquare className="w-5 h-5" />
-                      {t.progressUpdate}
-                    </button>
-                    
-                    <button 
-                      onClick={() => {
-                        setEditData(selectedSubmission);
-                        setModalPriority(selectedSubmission.priority);
-                        setSelectedDate(selectedSubmission.deadline);
-                        setIsCalendarOpen(false);
-                        setIsEditing(true);
-                        setSelectedId(null);
-                      }}
-                      className="w-full flex items-center justify-center gap-2 px-4 py-3.5 rounded-2xl font-bold transition-all active:scale-[0.98] border-none bg-[var(--m3-primary)]/60 text-white hover:bg-[var(--m3-primary)]/70"
-                    >
-                      <Edit3 className="w-5 h-5" />
-                      {t.editTask}
-                    </button>
+                    {!selectedSubmission.isDeleted && (
+                      <button 
+                        onClick={() => {
+                          setEditData(selectedSubmission);
+                          setModalPriority(selectedSubmission.priority);
+                          setSelectedDate(selectedSubmission.deadline);
+                          setIsCalendarOpen(false);
+                          setIsEditing(true);
+                          setSelectedId(null);
+                        }}
+                        className="w-full flex items-center justify-center gap-2 px-4 py-3.5 rounded-2xl font-bold transition-all active:scale-[0.98] border-none bg-[var(--m3-primary)]/60 text-white hover:bg-[var(--m3-primary)]/70"
+                      >
+                        <Edit3 className="w-5 h-5" />
+                        {t.editTask}
+                      </button>
+                    )}
 
-                    {selectedSubmission.status !== 'completed' && (
+                    {selectedSubmission.status !== 'completed' && !selectedSubmission.isDeleted && (
                       <button 
                         onClick={(e) => {
                           toggleComplete(selectedSubmission.id, e as any);
@@ -2039,7 +2195,7 @@ export default function App() {
                             initial={{ opacity: 0, y: -10, scale: 0.95 }}
                             animate={{ opacity: 1, y: 4, scale: 1 }}
                             exit={{ opacity: 0, y: -10, scale: 0.95 }}
-                            className="absolute z-50 left-0 right-0 top-full bg-[var(--m3-surface-container-high)] border border-[var(--m3-outline)]/10 rounded-2xl shadow-xl max-h-60 overflow-y-auto scrollbar-custom py-2"
+                            className="absolute z-50 left-0 right-0 top-full bg-[var(--m3-surface-container-high)] border border-[var(--m3-outline)]/10 rounded-2xl shadow-xl max-h-[60vh] sm:max-h-[400px] overflow-y-auto scrollbar-custom py-2"
                           >
                             {subjects.map(s => (
                               <button
@@ -2101,11 +2257,11 @@ export default function App() {
                     >
                       <div className="space-y-1">
                         <label className="text-xs font-bold text-[var(--m3-on-surface-variant)] uppercase">{t.startPage}</label>
-                        <input name="startPage" type="number" placeholder="0" className="w-full px-4 py-3 rounded-xl bg-[var(--m3-surface-container)] border border-[var(--m3-outline)]/10 text-sm font-bold focus:outline-none focus:ring-4 focus:ring-[var(--m3-primary)]/10 transition-all placeholder:font-medium" />
+                        <input name="startPage" type="number" min="0" step="1" placeholder="0" className="w-full px-4 py-3 rounded-xl bg-[var(--m3-surface-container)] border border-[var(--m3-outline)]/10 text-sm font-bold focus:outline-none focus:ring-4 focus:ring-[var(--m3-primary)]/10 transition-all placeholder:font-medium" />
                       </div>
                       <div className="space-y-1">
                         <label className="text-xs font-bold text-[var(--m3-on-surface-variant)] uppercase">{t.endPage}</label>
-                        <input name="endPage" type="number" placeholder="100" className="w-full px-4 py-3 rounded-xl bg-[var(--m3-surface-container)] border border-[var(--m3-outline)]/10 text-sm font-bold focus:outline-none focus:ring-4 focus:ring-[var(--m3-primary)]/10 transition-all placeholder:font-medium" />
+                        <input name="endPage" type="number" min="1" step="1" placeholder="100" className="w-full px-4 py-3 rounded-xl bg-[var(--m3-surface-container)] border border-[var(--m3-outline)]/10 text-sm font-bold focus:outline-none focus:ring-4 focus:ring-[var(--m3-primary)]/10 transition-all placeholder:font-medium" />
                       </div>
                     </motion.div>
                   )}
@@ -2120,10 +2276,15 @@ export default function App() {
                         required
                         defaultValue={selectedDate ? format(selectedDate, 'yyyy-MM-dd') : format(new Date(), 'yyyy-MM-dd')}
                         onChange={(e) => {
-                          const [y, m, d] = e.target.value.split('-').map(Number);
+                          const val = e.target.value;
+                          if (!val || val.length !== 10) return;
+                          const [y, m, d] = val.split('-').map(Number);
+                          if (isNaN(y) || isNaN(m) || isNaN(d) || y < 1000 || y > 9999) return;
                           const date = new Date(selectedDate || new Date());
                           date.setFullYear(y, m - 1, d);
-                          setSelectedDate(date);
+                          if (!isNaN(date.getTime())) {
+                            setSelectedDate(date);
+                          }
                         }}
                         className="flex-1 px-5 py-4 rounded-2xl bg-[var(--m3-surface-container)] border border-[var(--m3-outline)]/10 focus:outline-none focus:ring-4 focus:ring-[var(--m3-primary)]/10 font-bold text-[var(--m3-on-surface)] transition-all"
                       />
@@ -2388,6 +2549,7 @@ export default function App() {
                     type="number" 
                     autoFocus
                     min="1"
+                    step="1"
                     max={submissions.find(s => s.id === activeTimerId)?.taskType === 'pages' ? "999" : "100"}
                     value={progressInputValue}
                     onChange={(e) => setProgressInputValue(e.target.value)}
@@ -2522,7 +2684,7 @@ export default function App() {
                             initial={{ opacity: 0, y: -10, scale: 0.95 }}
                             animate={{ opacity: 1, y: 4, scale: 1 }}
                             exit={{ opacity: 0, y: -10, scale: 0.95 }}
-                            className="absolute z-50 left-0 right-0 top-full bg-[var(--m3-surface-container-high)] border border-[var(--m3-outline)]/10 rounded-2xl shadow-xl max-h-60 overflow-y-auto scrollbar-custom py-2"
+                            className="absolute z-50 left-0 right-0 top-full bg-[var(--m3-surface-container-high)] border border-[var(--m3-outline)]/10 rounded-2xl shadow-xl max-h-[60vh] sm:max-h-[400px] overflow-y-auto scrollbar-custom py-2"
                           >
                             {subjects.map(s => (
                               <button
@@ -2546,6 +2708,25 @@ export default function App() {
                     </div>
                   </div>
                 </div>
+
+                {editData?.taskType === 'pages' && (
+                  <motion.div 
+                    initial={{ opacity: 0, height: 0 }}
+                    animate={{ opacity: 1, height: 'auto' }}
+                    transition={{ duration: 0.3, ease: "easeOut" }}
+                    className="grid grid-cols-2 gap-4 pb-2"
+                  >
+                    <div className="space-y-1">
+                      <label className="text-xs font-bold text-[var(--m3-on-surface-variant)] uppercase">{t.startPage}</label>
+                      <input name="startPage" type="number" min="0" step="1" defaultValue={editData.startPage} placeholder="0" className="w-full px-4 py-3 rounded-xl bg-[var(--m3-surface-container)] border border-[var(--m3-outline)]/10 text-sm font-bold focus:outline-none focus:ring-4 focus:ring-[var(--m3-primary)]/10 transition-all placeholder:font-medium" />
+                    </div>
+                    <div className="space-y-1">
+                      <label className="text-xs font-bold text-[var(--m3-on-surface-variant)] uppercase">{t.endPage}</label>
+                      <input name="endPage" type="number" min="1" step="1" defaultValue={editData.endPage} placeholder="100" className="w-full px-4 py-3 rounded-xl bg-[var(--m3-surface-container)] border border-[var(--m3-outline)]/10 text-sm font-bold focus:outline-none focus:ring-4 focus:ring-[var(--m3-primary)]/10 transition-all placeholder:font-medium" />
+                    </div>
+                  </motion.div>
+                )}
+
                 <div className="flex flex-col gap-6">
                   <div className="space-y-3">
                     <label className="text-xs font-bold text-[var(--m3-on-surface-variant)] uppercase tracking-widest px-1">{t.deadline}</label>
@@ -2556,10 +2737,15 @@ export default function App() {
                         required
                         defaultValue={selectedDate ? format(selectedDate, 'yyyy-MM-dd') : format(new Date(), 'yyyy-MM-dd')}
                         onChange={(e) => {
-                          const [y, m, d] = e.target.value.split('-').map(Number);
+                          const val = e.target.value;
+                          if (!val || val.length !== 10) return;
+                          const [y, m, d] = val.split('-').map(Number);
+                          if (isNaN(y) || isNaN(m) || isNaN(d) || y < 1000 || y > 9999) return;
                           const date = new Date(selectedDate || new Date());
                           date.setFullYear(y, m - 1, d);
-                          setSelectedDate(date);
+                          if (!isNaN(date.getTime())) {
+                            setSelectedDate(date);
+                          }
                         }}
                         className="flex-1 px-5 py-4 rounded-2xl bg-[var(--m3-surface-container)] border border-[var(--m3-outline)]/10 focus:outline-none focus:ring-4 focus:ring-[var(--m3-primary)]/10 font-bold text-[var(--m3-on-surface)] transition-all"
                       />
@@ -2759,6 +2945,8 @@ export default function App() {
         )}
       </AnimatePresence>
 
+      {renderTermsModal()}
+
       <AnimatePresence>
         {showUpdateNotice && (
           <motion.div 
@@ -2825,6 +3013,7 @@ function SubmissionCard({
   onDelete,
   isHistoryView,
   language = 'ja',
+  theme = 'light',
   isSelectionMode,
   isSelected,
   onToggleSelect
@@ -2835,6 +3024,7 @@ function SubmissionCard({
   onDelete?: (e: React.MouseEvent) => void;
   isHistoryView?: boolean;
   language?: Language;
+  theme?: 'light' | 'dark' | 'dog' | 'cat' | 'animal' | 'flower';
   isSelectionMode?: boolean;
   isSelected?: boolean;
   onToggleSelect?: (e: React.MouseEvent) => void;
@@ -2907,7 +3097,7 @@ function SubmissionCard({
           <motion.h3 
             layoutId={`title-${submission.id}`} 
             transition={{ duration: 0.25, ease: "easeOut" }}
-            className="text-sm font-bold text-[var(--m3-on-surface)] truncate"
+            className="text-sm font-bold text-[var(--m3-on-surface)] line-clamp-2 leading-tight"
           >
             {submission.title}
           </motion.h3>
@@ -2930,103 +3120,110 @@ function SubmissionCard({
       }}
       onClick={onClick}
       whileTap={{ scale: 0.98 }}
+      whileHover={{ y: -4 }}
       className={cn(
-        "group relative cursor-pointer bg-[var(--m3-surface-container)] rounded-[32px] p-8 border border-white/10 dark:border-white/5 hover:border-[var(--m3-primary)]/30 hover:shadow-xl hover:shadow-[var(--m3-primary)]/10 flex flex-col gap-6 overflow-hidden transition-all duration-300",
-        submission.priority === 'high' && submission.status !== 'completed' && "border-red-500/30 ring-2 ring-red-500/10 bg-gradient-to-br from-[var(--m3-surface-container)] to-red-500/5"
+        "group relative cursor-pointer bg-[var(--m3-surface-container)] flex flex-col justify-between overflow-hidden transition-[box-shadow,border-color,background-color] duration-300",
+        "h-full min-h-[180px] rounded-[24px] p-5 sm:p-6",
+        "border border-white/10 dark:border-white/5 hover:border-[var(--m3-primary)]/40 hover:shadow-xl hover:shadow-[var(--m3-primary)]/10",
+        submission.priority === 'high' && submission.status !== 'completed' && "border-red-500/30 ring-1 ring-red-500/20 bg-gradient-to-br from-[var(--m3-surface-container)] to-red-500/10",
+        theme === 'dog' && "hover:border-[#8b5a2b]/30",
+        theme === 'cat' && "hover:border-[#c26978]/30",
+        theme === 'animal' && "hover:border-[#b16300]/30",
+        theme === 'flower' && "hover:border-[#9a4058]/30"
       )}
     >
       {submission.priority === 'high' && submission.status !== 'completed' && (
-        <div className="absolute top-0 right-0 w-24 h-24 pointer-events-none">
+        <div className="absolute top-0 right-0 w-8 h-8 pointer-events-none overflow-hidden">
           <div className="absolute top-1 right-1 w-2 h-2 bg-red-500 rounded-full animate-ping" />
         </div>
       )}
-      <div className="flex items-start justify-between gap-4">
-        <div className="flex flex-col gap-2 min-w-0 pr-4">
-          <div className="flex items-center gap-2">
-            <motion.span 
-              layoutId={`subject-${submission.id}`} 
-              transition={{ duration: 0.25, ease: "easeOut" }}
-              className="text-xs font-black uppercase tracking-[0.2em] text-[var(--m3-primary)]"
-            >
-              {submission.subject}
-            </motion.span>
-            <div className={cn(
-              "flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-black uppercase tracking-tighter",
-              submission.priority === 'high' ? "bg-red-500 text-white shadow-[0_0_8px_rgba(239,68,68,0.5)]" : 
-              submission.priority === 'medium' ? "bg-orange-500 text-white" : "bg-blue-500 text-white"
-            )}>
-              {submission.priority === 'high' && <AlertCircle className="w-2.5 h-2.5" />}
-              {t[submission.priority]}
-            </div>
-          </div>
-          <motion.h3 
-            layoutId={`title-${submission.id}`} 
-            transition={{ duration: 0.25, ease: "easeOut" }}
-            className={cn(
-              "text-[19px] font-bold text-[var(--m3-on-surface)] leading-snug tracking-tight line-clamp-2",
-              submission.priority === 'high' && "text-red-600 dark:text-red-400"
-            )}
+
+      {/* Theme Background Decorations */}
+      <div className="absolute inset-0 pointer-events-none opacity-[0.04] sm:opacity-[0.06] flex items-center justify-center overflow-hidden">
+        {theme === 'dog' && <Dog className="w-32 h-32 rotate-12 translate-x-1/4 translate-y-1/4" />}
+        {theme === 'cat' && <Cat className="w-32 h-32 -rotate-12 -translate-x-1/4 translate-y-1/4" />}
+        {theme === 'animal' && <Rabbit className="w-32 h-32 rotate-12 translate-x-1/4" />}
+        {theme === 'flower' && <Flower className="w-32 h-32 -rotate-12 translate-y-1/4" />}
+      </div>
+
+      {/* Main Content Vertical */}
+      <div className="flex flex-col gap-1.5 min-w-0 relative z-10 overflow-visible">
+        <div className="flex items-center justify-between gap-1 mb-1">
+          <motion.span 
+            layoutId={`subject-${submission.id}`} 
+            className="text-[10px] font-black uppercase tracking-[0.15em] text-[var(--m3-primary)]/80"
           >
-            {submission.title}
-          </motion.h3>
-        </div>
-        <div className="flex flex-col items-end gap-2 shrink-0">
+            {submission.subject}
+          </motion.span>
           <div className={cn(
-            "text-xs font-black px-4 py-1.5 rounded-xl uppercase tracking-wider shadow-sm",
-            urgencyStyles.tag,
-            submission.priority === 'high' && submission.status !== 'completed' && "animate-pulse"
+            "flex items-center gap-1 px-1.5 py-0.5 rounded-full text-[9px] font-black uppercase tracking-wider shadow-sm",
+            submission.priority === 'high' ? "bg-red-500 text-white" : 
+            submission.priority === 'medium' ? "bg-orange-500 text-white" : "bg-blue-500 text-white"
+          )}>
+            {submission.priority === 'high' && <AlertCircle className="w-2.5 h-2.5" />}
+            {t[submission.priority]}
+          </div>
+        </div>
+        <motion.h3 
+          layoutId={`title-${submission.id}`} 
+          className={cn(
+            "text-base sm:text-lg font-bold text-[var(--m3-on-surface)] leading-snug tracking-tight break-words whitespace-normal",
+            submission.priority === 'high' && submission.status !== 'completed' && "text-red-700 dark:text-red-400"
+          )}
+        >
+          {submission.title}
+        </motion.h3>
+      </div>
+
+      <div className="flex flex-col gap-2.5 mt-4 min-h-0 relative z-10">
+        {/* Status/Deadlines */}
+        <div className="flex flex-wrap items-center gap-1.5 sm:gap-2">
+          <div className={cn(
+            "inline-flex items-center gap-1.5 text-[11px] sm:text-xs font-bold px-2.5 py-1 sm:px-3 sm:py-1.5 rounded-xl transition-colors",
+            isOverdue ? "bg-red-100 dark:bg-red-900/30 text-red-600 dark:text-red-400" : "bg-[var(--m3-surface-variant)]/50 text-[var(--m3-on-surface-variant)]"
+          )}>
+            <Calendar className="w-3 h-3 sm:w-3.5 sm:h-3.5" />
+            <span className="tabular-nums">
+              {format(submission.deadline, 'MM/dd' + (submission.deadline.getHours() === 23 && submission.deadline.getMinutes() === 59 ? '' : ' HH:mm'))}
+            </span>
+          </div>
+          
+          <div className={cn(
+            "text-[9px] sm:text-[10px] font-black px-1.5 py-0.5 sm:px-2 sm:py-1 rounded-lg uppercase tracking-wider shrink-0",
+            urgencyStyles.tag
           )}>
             {urgencyStyles.label}
           </div>
-        </div>
-      </div>
 
-      <div className="flex items-end justify-between mt-auto pt-2">
-        <div className="flex flex-col gap-2">
-          <div className="flex items-center gap-2 text-[var(--m3-on-surface-variant)]">
-            <div className={cn(
-              "p-2 rounded-lg bg-[var(--m3-surface-variant)]/40",
-              isOverdue && "bg-red-100 dark:bg-red-900/30 text-red-600 dark:text-red-400"
-            )}>
-              <Calendar className="w-4 h-4" />
-            </div>
-            <div className="flex flex-col">
-              <span className="text-sm font-bold">
-                {format(submission.deadline, 'MM/dd' + (submission.deadline.getHours() === 23 && submission.deadline.getMinutes() === 59 ? '' : ' HH:mm'))}
-              </span>
-              <span className={cn(
-                "text-xs font-bold",
-                isOverdue ? "text-red-600 dark:text-red-400" : "text-[var(--m3-on-surface-variant)] opacity-70"
-              )}>
-                {isOverdue ? t.overdue : `${t.daysLeft} ${daysLeft}${t.days}`}
-              </span>
-            </div>
-          </div>
           {submission.taskType === 'pages' && (
-            <div className="flex items-center gap-2 text-[var(--m3-on-surface-variant)] mt-1">
-              <BookOpen className="w-4 h-4 opacity-70" />
-              <span className="text-xs font-bold tabular-nums">
-                {submission.currentPage} <span className="opacity-40">/</span> {submission.endPage}p
+            <div className="flex items-center gap-1 sm:gap-1.5 text-[10px] sm:text-[11px] font-bold text-[var(--m3-on-surface-variant)] opacity-70 shrink-0">
+              <BookOpen className="w-3 h-3 sm:w-3.5 sm:h-3.5" />
+              <span className="tabular-nums">
+                {submission.currentPage} / {submission.endPage}p
               </span>
             </div>
           )}
         </div>
         
-        <div className="flex flex-col items-end gap-2 w-6/12 max-w-[140px]">
-           <div className="flex justify-between w-full px-0.5">
-              <span className="text-sm font-black tabular-nums text-[var(--m3-primary)] leading-none">{submission.progress}%</span>
-           </div>
-           <div className="h-2 w-full bg-[var(--m3-surface-variant)]/50 rounded-full overflow-hidden shadow-inner p-[1px]">
-              <motion.div 
-                initial={{ width: 0 }}
-                animate={{ width: `${submission.progress}%` }}
-                transition={{ duration: 0.8, ease: [0.16, 1, 0.3, 1] }}
-                className={cn(
-                  "h-full rounded-full transition-all duration-500 shadow-sm",
-                  daysLeft <= 0 ? "bg-red-500" : "bg-[var(--m3-primary)]"
-                )}
-              />
-           </div>
+        {/* Progress Section */}
+        <div className="flex flex-col gap-1 shrink-0 py-0.5">
+          <div className="flex justify-between items-end w-full px-0.5">
+            <span className="text-[9px] sm:text-[10px] uppercase font-black tracking-widest text-[var(--m3-on-surface-variant)] opacity-50">
+              {t.progress}
+            </span>
+            <span className="text-xs sm:text-sm font-black tabular-nums text-[var(--m3-primary)]">{submission.progress}%</span>
+          </div>
+          <div className="h-1.5 sm:h-2 w-full bg-[var(--m3-surface-variant)]/60 rounded-full overflow-hidden shadow-inner">
+            <motion.div 
+              initial={{ width: 0 }}
+              animate={{ width: `${submission.progress}%` }}
+              transition={{ duration: 0.8, ease: [0.16, 1, 0.3, 1] }}
+              className={cn(
+                "h-full rounded-full transition-all duration-500",
+                daysLeft <= 0 ? "bg-red-500" : "bg-[var(--m3-primary)]"
+              )}
+            />
+          </div>
         </div>
       </div>
     </motion.div>
