@@ -134,6 +134,7 @@ const RELEASE_NOTES = {
       "新テーマ（いぬ、ねこ、サファリ、フラワー）を追加しました",
       "UI/UXの全体的なブラッシュアップを行いました",
       "テーマ切り替えUIをドロップダウン形式に改善しました",
+      "利用規約をいつでも確認できるようになりました",
       "パフォーマンスの向上と軽微なバグの修正を行いました"
     ]
   }
@@ -301,6 +302,11 @@ export default function App() {
   };
 
   const t = translations[language];
+
+  const closeUpdateNotice = () => {
+    localStorage.setItem('app-last-version', APP_VERSION);
+    setShowUpdateNotice(false);
+  };
 
   // Logic to load settings from Firestore upon login
   useEffect(() => {
@@ -1271,6 +1277,61 @@ export default function App() {
         </>
       )}
 
+      {/* Update Notification Modal */}
+      <AnimatePresence>
+        {showUpdateNotice && (
+          <motion.div 
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 z-[200] flex items-center justify-center p-4 sm:p-6 bg-black/40 backdrop-blur-md"
+          >
+            <motion.div 
+              initial={{ scale: 0.9, opacity: 0, y: 20 }}
+              animate={{ scale: 1, opacity: 1, y: 0 }}
+              exit={{ scale: 0.9, opacity: 0, y: 20 }}
+              className="bg-[var(--m3-surface-container-high)] w-full max-w-sm rounded-[32px] p-8 shadow-2xl relative border border-[var(--m3-outline)]/10"
+            >
+              <div className="space-y-6 text-center">
+                <div className="w-16 h-16 rounded-full bg-[var(--m3-primary)]/10 flex items-center justify-center mx-auto">
+                  <Zap className="w-8 h-8 text-[var(--m3-primary)]" />
+                </div>
+                
+                <div className="space-y-2">
+                  <h2 className="text-xl font-black text-[var(--m3-on-surface)]">
+                    {RELEASE_NOTES.title}
+                  </h2>
+                  <p className="text-xs font-black text-[var(--m3-primary)] uppercase tracking-widest">Version {APP_VERSION}</p>
+                </div>
+
+                <div className="space-y-3 text-left">
+                  <h3 className="text-sm font-black text-[var(--m3-on-surface-variant)] uppercase tracking-wider px-1">
+                    {RELEASE_NOTES.features.title}
+                  </h3>
+                  <ul className="space-y-2">
+                    {RELEASE_NOTES.features.items.map((item, idx) => (
+                      <li key={idx} className="flex items-start gap-3">
+                        <div className="mt-1.5 w-1.5 h-1.5 rounded-full bg-[var(--m3-primary)] shrink-0" />
+                        <span className="text-sm font-bold text-[var(--m3-on-surface)] leading-relaxed">
+                          {item}
+                        </span>
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+
+                <button 
+                  onClick={closeUpdateNotice}
+                  className="w-full py-4 rounded-2xl bg-[var(--m3-primary)] text-[var(--m3-on-primary)] font-black text-sm transition-all hover:bg-[var(--m3-primary)]/90 shadow-lg shadow-[var(--m3-primary)]/20 active:scale-[0.98]"
+                >
+                  {language === 'ja' ? '確認しました' : 'Got it!'}
+                </button>
+              </div>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
       <div className="max-w-[1440px] mx-auto h-screen flex flex-col p-3 sm:p-5 lg:p-6">
         {/* Header */}
         <header className="flex items-center justify-between mb-6 sm:mb-8">
@@ -1918,8 +1979,9 @@ export default function App() {
                   setIsSettingsOpen(false);
                   setShowTermsModal(true);
                 }}
-                className="mt-3 text-xs font-bold text-[var(--m3-primary)] hover:underline"
+                className="mt-3 inline-flex items-center gap-2 px-6 py-2 rounded-xl bg-[var(--m3-surface-container)] text-[var(--m3-primary)] text-xs font-bold hover:bg-[var(--m3-primary)]/5 transition-all border border-[var(--m3-primary)]/10 shadow-sm"
               >
+                <BookOpen className="w-3.5 h-3.5" />
                 {t.termsOfService}
               </button>
               <div className="mt-4 text-[11px] font-mono text-[var(--m3-on-surface-variant)]/30">
