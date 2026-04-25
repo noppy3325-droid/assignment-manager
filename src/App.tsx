@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useMemo, useRef, useCallback } from 'react';
 import { motion, AnimatePresence, LayoutGroup } from 'motion/react';
-import { Plus, Calendar, BookOpen, CheckCircle2, Clock, ChevronRight, ChevronDown, X, Settings, LogOut, LogIn, Trash2, Sun, Moon, Zap, Play, Pause, Square, CheckSquare, Edit3, Coffee, Brain, Eye, EyeOff, AlertCircle, Dog, Cat, Bird, TreePine, PawPrint, Rabbit, Flower } from 'lucide-react';
-import { format, differenceInDays, isPast, isToday, startOfDay, formatDistanceToNow } from 'date-fns';
+import { Plus, Calendar, BookOpen, CheckCircle2, Clock, ChevronRight, ChevronDown, X, Settings, LogOut, LogIn, Trash2, Sun, Moon, Zap, Play, Pause, Square, CheckSquare, Edit3, Coffee, Brain, Eye, EyeOff, AlertCircle, Dog, Cat, Bird, TreePine, PawPrint, Rabbit, Flower, Flower2, MousePointer2 } from 'lucide-react';
+import { format, differenceInDays, isPast, isToday, startOfDay, formatDistanceToNow, startOfWeek, endOfWeek, startOfMonth, endOfMonth, addDays, isSameMonth, isSameDay } from 'date-fns';
 import { ja } from 'date-fns/locale';
 import { DayPicker } from 'react-day-picker';
 import 'react-day-picker/dist/style.css';
@@ -13,7 +13,9 @@ import {
   PointerSensor,
   useSensor,
   useSensors,
-  DragEndEvent
+  DragEndEvent,
+  useDraggable,
+  useDroppable
 } from '@dnd-kit/core';
 import {
   arrayMove,
@@ -45,7 +47,8 @@ import {
   serverTimestamp,
   Timestamp,
   User,
-  getDocFromServer
+  getDocFromServer,
+  analytics
 } from './lib/firebase';
 
 enum OperationType {
@@ -102,6 +105,7 @@ interface Submission {
   title: string;
   subject: string;
   deadline: any;
+  scheduledDate?: any;
   status: 'pending' | 'completed';
   priority: 'low' | 'medium' | 'high';
   progress: number;
@@ -123,19 +127,19 @@ const DEFAULT_SUBJECTS = [
   "世界史", "日本史", "地理", "現代社会", "倫理", "政治・経済", "情報", "その他"
 ];
 
-const APP_VERSION = '1.2.1';
+const APP_VERSION = '1.3.0';
 
 const RELEASE_NOTES = {
-  version: '1.2.1',
-  title: "🎉 アップデートのお知らせ (v1.2.1)",
+  version: '1.3.0',
+  title: "🎉 メジャーアップデート！ (v1.3.0)",
   features: {
-    title: "✨ 新機能・改善点",
+    title: "✨ アップデート内容",
     items: [
-      "新テーマ（いぬ、ねこ、サファリ、フラワー）を追加しました",
-      "UI/UXの全体的なブラッシュアップを行いました",
-      "テーマ切り替えUIをドロップダウン形式に改善しました",
-      "利用規約をいつでも確認できるようになりました",
-      "パフォーマンスの向上と軽微なバグの修正を行いました"
+      "新テーマの追加：いぬ、ねこ、サファリ（アニマル）、フラワーのテーマを追加しました",
+      "UI/UXの刷新：テーマ切り替えを使いやすいドロップダウン形式に変更し、全体的なデザインをブラッシュアップしました",
+      "新機能：待望のカレンダー表示機能を追加しました",
+      "利用規約の常時確認：設定画面からいつでも規約を確認できるようになりました",
+      "バグ修正：軽微なバグの修正とパフォーマンスの向上を行いました"
     ]
   }
 };
@@ -176,6 +180,39 @@ const TERMS_OF_SERVICE = {
   }
 };
 
+const DroppableDateCell: React.FC<{ id: string, children: React.ReactNode, className?: string, onClick?: () => void }> = ({ id, children, className, onClick }) => {
+  const { isOver, setNodeRef } = useDroppable({ id });
+  return (
+    <div 
+      ref={setNodeRef} 
+      onClick={onClick} 
+      className={cn(className, isOver && "ring-2 ring-inset ring-[var(--m3-primary)] bg-[var(--m3-primary)]/5")}
+    >
+      {children}
+    </div>
+  );
+};
+
+const DraggableTaskRender: React.FC<{ id: string, children: React.ReactNode, className?: string, disabled?: boolean }> = ({ id, children, className, disabled }) => {
+  const { attributes, listeners, setNodeRef, transform, isDragging } = useDraggable({ id, disabled });
+  const style = transform ? {
+    transform: CSS.Translate.toString(transform),
+    zIndex: 9999,
+  } : undefined;
+  return (
+    <div 
+      ref={setNodeRef} 
+      style={style} 
+      {...(disabled ? {} : listeners)} 
+      {...(disabled ? {} : attributes)} 
+      className={cn(className, !disabled && isDragging && "opacity-50 cursor-grabbing")}
+      onClick={(e) => !disabled && isDragging && e.stopPropagation()}
+    >
+      {children}
+    </div>
+  );
+};
+
 export default function App() {
   const [user, setUser] = useState<User | null>(null);
   const [isAuthReady, setIsAuthReady] = useState(false);
@@ -186,6 +223,7 @@ export default function App() {
   const [editData, setEditData] = useState<Submission | null>(null);
   const [selectedDate, setSelectedDate] = useState<Date | undefined>(new Date());
   const [isCalendarOpen, setIsCalendarOpen] = useState(false);
+  const [calendarView, setCalendarView] = useState<'monthly' | 'weekly' | 'yearly'>('monthly');
   const [addTaskType, setAddTaskType] = useState<'pages' | 'percentage'>('percentage');
   const [activeTab, setActiveTab] = useState<'active' | 'history'>('active');
   const [isSelectionMode, setIsSelectionMode] = useState(false);
@@ -263,14 +301,39 @@ export default function App() {
         const newIndex = items.indexOf(over.id as string);
         const newItems = arrayMove(items, oldIndex, newIndex);
         localStorage.setItem('app-subjects', JSON.stringify(newItems));
-        // Sync to cloud if user logged in
-        if (user) {
-          setDoc(doc(db, 'users', user.uid), { subjects: newItems }, { merge: true });
-        }
+        syncSettings({ subjects: newItems });
         return newItems;
       });
     }
   }
+
+  const handleCalendarDragEnd = async (event: DragEndEvent) => {
+    const { active, over } = event;
+    if (!over) return;
+    
+    const activeId = String(active.id);
+    const overId = String(over.id);
+    
+    if (activeId.startsWith('task-') && overId.startsWith('date-')) {
+      const taskId = activeId.replace('task-', '');
+      const dateStr = overId.replace('date-', '');
+      const [year, month, day] = dateStr.split('-').map(Number);
+      
+      const task = submissions.find(s => s.id === taskId);
+      if (task) {
+        try {
+          const newDate = new Date();
+          newDate.setFullYear(year, month - 1, day);
+          newDate.setHours(0, 0, 0, 0);
+          await updateDoc(doc(db, 'submissions', taskId), {
+            scheduledDate: Timestamp.fromDate(newDate)
+          });
+        } catch(error) {
+          handleFirestoreError(error, OperationType.UPDATE, `submissions/${taskId}`);
+        }
+      }
+    }
+  };
 
   // Timer states
   const [activeTimerId, setActiveTimerId] = useState<string | null>(null);
@@ -296,6 +359,29 @@ export default function App() {
     cancelLabel?: string;
   } | null>(null);
 
+  const tasksByDate = useMemo(() => {
+    const map: Record<string, Submission[]> = {};
+    submissions.forEach(sub => {
+      if (sub.isDeleted || !sub.scheduledDate) return;
+      const dateKey = format(sub.scheduledDate, 'yyyy-MM-dd');
+      if (!map[dateKey]) map[dateKey] = [];
+      map[dateKey].push(sub);
+    });
+    return map;
+  }, [submissions]);
+
+  const selectedDateSubmissions = useMemo(() => {
+    if (!selectedDate) return [];
+    return submissions.filter(sub => {
+      if (sub.isDeleted || !sub.scheduledDate) return false;
+      return isSameDay(sub.scheduledDate, selectedDate);
+    });
+  }, [submissions, selectedDate]);
+
+  const unscheduledSubmissions = useMemo(() => {
+    return submissions.filter(sub => !sub.isDeleted && sub.status !== 'completed' && !sub.scheduledDate);
+  }, [submissions]);
+
   const showToast = (message: string) => {
     setToastMessage(message);
     setTimeout(() => setToastMessage(null), 3000);
@@ -308,60 +394,57 @@ export default function App() {
     setShowUpdateNotice(false);
   };
 
-  // Logic to load settings from Firestore upon login
-  useEffect(() => {
-    if (!user) return;
-
-    // Listen for remote settings changes
-    const unsub = onSnapshot(doc(db, 'users', user.uid), (docSnap) => {
-      if (docSnap.exists()) {
-        const data = docSnap.data();
-        
-        // Only update if different and not currently syncing local changes
-        if (data.theme && data.theme !== theme) setTheme(data.theme);
-        if (data.language && data.language !== language) setLanguage(data.language);
-        if (data.subjects && JSON.stringify(data.subjects) !== JSON.stringify(subjects)) {
-          setSubjects(data.subjects);
-        }
-        if (data.pomodoroDurations && JSON.stringify(data.pomodoroDurations) !== JSON.stringify(pomodoroDurations)) {
-          setPomodoroDurations(data.pomodoroDurations);
-        }
-      } else {
-        // First time login - push current local settings to firestore
-        setDoc(doc(db, 'users', user.uid), {
-          theme,
-          language,
-          subjects,
-          pomodoroDurations
-        }, { merge: true });
-      }
-    });
-
-    return () => unsub();
-  }, [user]);
-
   // Keep track of latest settings to reliably sync on tab close
   const latestSettings = useRef({ theme, language, subjects, pomodoroDurations });
   useEffect(() => {
     latestSettings.current = { theme, language, subjects, pomodoroDurations };
   }, [theme, language, subjects, pomodoroDurations]);
 
-  // Sync state changes to Firestore (Debounced to avoid excessive writes)
+  const syncSettings = async (updates: Partial<typeof latestSettings.current>) => {
+    if (!user) return;
+    try {
+      await setDoc(doc(db, 'users', user.uid), updates, { merge: true });
+    } catch (e) {
+      console.warn("Failed to sync settings", e);
+    }
+  };
+
+  // Logic to load settings from Firestore upon login
   useEffect(() => {
     if (!user) return;
-    
-    const timeout = setTimeout(async () => {
-      try {
-        await setDoc(doc(db, 'users', user.uid), {
-          ...latestSettings.current
-        }, { merge: true });
-      } catch (e) {
-        console.warn("Failed to sync settings to cloud", e);
-      }
-    }, 30000); // 30s debounce to reduce write frequency
 
-    return () => clearTimeout(timeout);
-  }, [theme, language, subjects, pomodoroDurations, user]);
+    // Listen for remote settings changes
+    const unsub = onSnapshot(doc(db, 'users', user.uid), { includeMetadataChanges: true }, (docSnap) => {
+      // If the document has pending writes, it's a local optimistic update result.
+      // We ignore these to prevent the "reversion" flicker where the server hasn't 
+      // acknowledged our write yet and might return old values.
+      if (docSnap.metadata.hasPendingWrites) return;
+
+      if (docSnap.exists()) {
+        const data = docSnap.data();
+        
+        // Only update if different, using functional state updates to avoid stale closures
+        setTheme(t => data.theme && data.theme !== t ? data.theme : t);
+        setLanguage(l => data.language && data.language !== l ? data.language : l);
+        setSubjects(s => {
+          if (!data.subjects || JSON.stringify(data.subjects) === JSON.stringify(s)) return s;
+          return data.subjects;
+        });
+        setPomodoroDurations(p => {
+          if (!data.pomodoroDurations || JSON.stringify(data.pomodoroDurations) === JSON.stringify(p)) return p;
+          return data.pomodoroDurations;
+        });
+      } else {
+        // First time login - push current local settings to firestore
+        // But only if we have everything ready
+        if (latestSettings.current.subjects.length > 0) {
+          syncSettings(latestSettings.current);
+        }
+      }
+    });
+
+    return () => unsub();
+  }, [user]);
 
   // Emergency sync on tab close or page hide
   useEffect(() => {
@@ -529,6 +612,7 @@ export default function App() {
           ...docData,
           id: doc.id,
           deadline: (docData.deadline as Timestamp).toDate(),
+          scheduledDate: docData.scheduledDate ? (docData.scheduledDate as Timestamp).toDate() : undefined,
         } as Submission;
       });
       setSubmissions(data);
@@ -1252,28 +1336,20 @@ export default function App() {
       )}
       {theme === 'flower' && (
         <>
-          <div className="fixed inset-0 pointer-events-none z-0 overflow-hidden opacity-[0.1] text-[var(--m3-primary)] mix-blend-multiply flex items-center justify-center">
-            <motion.div
-              animate={{ scale: [1, 1.05, 1], rotate: [-1, 1, -1] }}
-              transition={{ duration: 30, repeat: Infinity, ease: "linear" }}
-            >
-              <Flower className="w-[120vw] h-[120vh] rotate-12 translate-x-1/4 translate-y-1/4 stroke-[0.3]" />
-            </motion.div>
+          <div className="fixed inset-0 pointer-events-none z-0 overflow-hidden opacity-[0.15] mix-blend-multiply">
+            {/* Scattered colorful flowers based on user image */}
+            <motion.div animate={{ y: [0, -15, 0], rotate: [0, 10, 0] }} transition={{ duration: 8, repeat: Infinity }} className="absolute top-[5%] left-[10%] text-pink-500"><Flower className="w-24 h-24" /></motion.div>
+            <motion.div animate={{ y: [0, 20, 0], rotate: [0, -15, 0] }} transition={{ duration: 12, repeat: Infinity }} className="absolute top-[15%] left-[40%] text-orange-400"><Flower2 className="w-16 h-16" /></motion.div>
+            <motion.div animate={{ scale: [1, 1.1, 1], rotate: [0, 5, 0] }} transition={{ duration: 10, repeat: Infinity }} className="absolute top-[8%] left-[75%] text-yellow-500"><Flower className="w-32 h-32" /></motion.div>
+            
+            <motion.div animate={{ x: [-10, 10, -10], rotate: [12, 15, 12] }} transition={{ duration: 15, repeat: Infinity }} className="absolute top-[45%] left-[5%] text-blue-400"><Flower2 className="w-20 h-20" /></motion.div>
+            <motion.div animate={{ rotate: 360 }} transition={{ duration: 40, repeat: Infinity, ease: "linear" }} className="absolute top-[50%] left-[50%] -translate-x-1/2 -translate-y-1/2 text-red-500 opacity-20"><Flower className="w-[40vw] h-[40vw] stroke-[0.5]" /></motion.div>
+            <motion.div animate={{ scale: [0.9, 1.05, 0.9], rotate: [-10, -5, -10] }} transition={{ duration: 14, repeat: Infinity }} className="absolute top-[40%] left-[85%] text-purple-400"><Flower className="w-28 h-28" /></motion.div>
+            
+            <motion.div animate={{ y: [0, 30, 0], x: [0, 10, 0] }} transition={{ duration: 11, repeat: Infinity }} className="absolute bottom-[15%] left-[15%] text-red-400"><Flower className="w-20 h-20" /></motion.div>
+            <motion.div animate={{ rotate: -360 }} transition={{ duration: 50, repeat: Infinity, ease: "linear" }} className="absolute bottom-[10%] left-[45%] text-green-400"><Flower2 className="w-16 h-16" /></motion.div>
+            <motion.div animate={{ y: [0, -20, 0], scale: [1, 1.2, 1] }} transition={{ duration: 9, repeat: Infinity }} className="absolute bottom-[20%] left-[80%] text-pink-400"><Flower2 className="w-24 h-24" /></motion.div>
           </div>
-          <motion.div 
-            animate={{ skewX: [-2, 2, -2] }}
-            transition={{ duration: 5, repeat: Infinity, ease: "easeInOut" }}
-            className="fixed top-10 left-[20%] opacity-[0.14] pointer-events-none z-0"
-          >
-            <Flower className="w-40 h-40" />
-          </motion.div>
-          <motion.div 
-            animate={{ rotate: [-3, 3, -3] }}
-            transition={{ duration: 8, repeat: Infinity, ease: "easeInOut" }}
-            className="fixed bottom-60 right-[15%] opacity-[0.14] pointer-events-none z-0"
-          >
-            <Flower className="w-32 h-32" />
-          </motion.div>
         </>
       )}
 
@@ -1368,6 +1444,13 @@ export default function App() {
             transition={{ duration: 0.4, ease: "easeOut" }}
             className="flex items-center gap-1 sm:gap-3"
           >
+            <button 
+              onClick={() => setIsCalendarOpen(true)}
+              className="p-3 rounded-full hover:bg-[var(--m3-surface-container)] text-[var(--m3-on-surface-variant)] transition-all active:scale-95"
+              title={language === 'ja' ? 'カレンダー' : 'Calendar'}
+            >
+              <Calendar className="w-5 h-5 sm:w-6 sm:h-6" />
+            </button>
             <button 
               onClick={() => setIsSettingsOpen(true)}
               className="p-3 rounded-full hover:bg-[var(--m3-surface-container)] text-[var(--m3-on-surface-variant)] transition-all active:scale-95"
@@ -1667,7 +1750,7 @@ export default function App() {
                           return a.deadline.getTime() - b.deadline.getTime();
                         })
                         .map((submission) => (
-                          <SubmissionCard 
+                          <MemoizedSubmissionCard 
                                 key={submission.id} 
                                 submission={submission} 
                                 isHistoryView={activeTab === 'history'}
@@ -1767,6 +1850,600 @@ export default function App() {
     </div>
   </div>
 
+  {/* Calendar Drawer */}
+  <AnimatePresence>
+    {isCalendarOpen && (
+      <>
+        <motion.div
+          initial={{ opacity: 0 }}
+          animate={{ opacity: 1 }}
+          exit={{ opacity: 0 }}
+          onClick={() => setIsCalendarOpen(false)}
+          className="fixed inset-0 bg-black/40 backdrop-blur-sm z-[150]"
+        />
+        <motion.div
+          initial={{ x: '100%' }}
+          animate={{ x: 0 }}
+          exit={{ x: '100%' }}
+          transition={{ type: 'spring', damping: 25, stiffness: 200 }}
+          className="fixed top-0 right-0 h-full w-full lg:max-w-[800px] sm:rounded-l-[32px] bg-[var(--m3-surface-container-high)] shadow-2xl z-[160] overflow-y-auto flex flex-col"
+        >
+          <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleCalendarDragEnd} autoScroll={false}>
+            <div className="p-4 sm:p-6 flex items-center justify-between border-b border-[var(--m3-outline-variant)]/40">
+            <div className="flex items-center gap-3">
+              <div className="w-10 h-10 rounded-2xl bg-[var(--m3-primary-container)] flex items-center justify-center text-[var(--m3-on-primary-container)]">
+                <Calendar className="w-6 h-6" />
+              </div>
+              <div>
+                <h2 className="text-lg sm:text-xl font-black text-[var(--m3-on-surface)]">
+                  {language === 'ja' ? 'カレンダー' : 'Calendar'}
+                </h2>
+              </div>
+            </div>
+            <button 
+              onClick={() => setIsCalendarOpen(false)}
+              className="p-2 sm:p-3 rounded-full hover:bg-[var(--m3-surface-container-highest)] text-[var(--m3-on-surface-variant)] transition-all"
+            >
+              <X className="w-6 h-6" />
+            </button>
+          </div>
+          
+          <div className="flex-1 overflow-y-auto px-4 sm:px-6 py-4 space-y-6 sm:space-y-8">
+            {/* View Switcher/Navigation Header */}
+            <div className="flex flex-col gap-4">
+              <div className="flex items-center gap-2">
+                <div className="flex-1 flex p-1 bg-[var(--m3-surface-container)] rounded-2xl border border-[var(--m3-outline-variant)]/20">
+                  {(['weekly', 'monthly', 'yearly'] as const).map((view) => (
+                    <button
+                      key={view}
+                      onClick={() => setCalendarView(view)}
+                      className={cn(
+                        "flex-1 py-1.5 sm:py-2 text-[10px] font-black uppercase tracking-widest rounded-xl transition-all",
+                        calendarView === view 
+                          ? "bg-[var(--m3-primary)] text-[var(--m3-on-primary)] shadow-md" 
+                          : "text-[var(--m3-on-surface-variant)] hover:bg-[var(--m3-surface-container-highest)]"
+                      )}
+                    >
+                      {language === 'ja' 
+                        ? { weekly: '週間', monthly: '月間', yearly: '年間' }[view]
+                        : view.charAt(0).toUpperCase() + view.slice(1)
+                      }
+                    </button>
+                  ))}
+                </div>
+                <button
+                  onClick={() => setSelectedDate(new Date())}
+                  className="px-3 sm:px-4 py-2 bg-[var(--m3-surface-container)] hover:bg-[var(--m3-surface-container-highest)] text-[var(--m3-primary)] border border-[var(--m3-outline-variant)]/20 rounded-2xl text-[10px] font-black uppercase tracking-widest transition-all active:scale-95 shrink-0"
+                >
+                  {language === 'ja' ? '今日' : 'Today'}
+                </button>
+              </div>
+
+              {calendarView === 'monthly' && (
+                <div className="flex items-center justify-between px-2 bg-[var(--m3-surface-container)] rounded-2xl p-2 border border-[var(--m3-outline-variant)]/10">
+                  <div className="text-sm font-black text-[var(--m3-on-surface)]">
+                    {selectedDate ? format(selectedDate, language === 'ja' ? 'yyyy年 M月' : 'MMMM yyyy', { locale: language === 'ja' ? ja : undefined }) : '---'}
+                  </div>
+                  <div className="flex items-center gap-1">
+                    <button 
+                      onClick={() => {
+                        const d = new Date(selectedDate || new Date());
+                        d.setMonth(d.getMonth() - 1);
+                        setSelectedDate(d);
+                      }}
+                      className="p-1.5 rounded-lg hover:bg-[var(--m3-surface-container-highest)] text-[var(--m3-on-surface-variant)] transition-all"
+                    >
+                      <ChevronRight className="w-4 h-4 rotate-180" />
+                    </button>
+                    <button 
+                      onClick={() => {
+                        const d = new Date(selectedDate || new Date());
+                        d.setMonth(d.getMonth() + 1);
+                        setSelectedDate(d);
+                      }}
+                      className="p-1.5 rounded-lg hover:bg-[var(--m3-surface-container-highest)] text-[var(--m3-on-surface-variant)] transition-all"
+                    >
+                      <ChevronRight className="w-4 h-4" />
+                    </button>
+                  </div>
+                </div>
+              )}
+            </div>
+
+            {/* Calendar Component */}
+            <div className={cn(
+              "bg-[var(--m3-surface-container)] rounded-[32px] border border-[var(--m3-outline-variant)]/30 overflow-hidden",
+              calendarView === 'monthly' ? "p-0" : "p-4",
+              calendarView === 'yearly' && "p-2",
+              calendarView === 'weekly' && "pb-2"
+            )}>
+              <style>{`
+                .rdp-row:empty { display: none; }
+                .calendar-dot-modifier::after {
+                  content: '';
+                  display: block;
+                  width: 4px;
+                  height: 4px;
+                  border-radius: 50%;
+                  background-color: currentColor;
+                  margin-top: 1px;
+                }
+                .calendar-dot-modifier:not(.rdp-day_selected)::after {
+                  background-color: var(--m3-primary);
+                }
+                /* Monthly Grid Container */
+                .monthly-grid {
+                  display: flex;
+                  flex-direction: column;
+                  width: 100%;
+                }
+                .monthly-header {
+                  display: grid;
+                  grid-template-columns: repeat(7, 1fr);
+                  border-bottom: 1.5px solid var(--m3-outline-variant);
+                  background: var(--m3-surface-container-high);
+                }
+                .monthly-header-cell {
+                  padding: 8px 4px;
+                  text-align: center;
+                  font-size: 10px;
+                  font-weight: 900;
+                  color: var(--m3-on-surface-variant);
+                  text-transform: uppercase;
+                  letter-spacing: 0.05em;
+                }
+                .monthly-row {
+                  display: grid;
+                  grid-template-columns: repeat(7, 1fr);
+                  border-bottom: 1px solid var(--m3-outline-variant);
+                }
+                .monthly-cell {
+                  min-height: 85px;
+                  border-right: 1px solid var(--m3-outline-variant);
+                  display: flex;
+                  flex-direction: column;
+                  padding: 4px;
+                  transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+                  cursor: pointer;
+                  background: var(--m3-surface-container);
+                }
+                .monthly-cell:hover {
+                  background: var(--m3-surface-container-high);
+                }
+                @media (min-width: 640px) {
+                  .monthly-cell {
+                    min-height: 100px;
+                  }
+                }
+                .monthly-cell:last-child { border-right: none; }
+                .monthly-cell-header {
+                  display: flex;
+                  justify-content: flex-end;
+                  margin-bottom: 2px;
+                }
+                .monthly-day-num {
+                  font-size: 11px;
+                  font-weight: 800;
+                  width: 22px;
+                  height: 22px;
+                  display: flex;
+                  align-items: center;
+                  justify-content: center;
+                  border-radius: 8px;
+                  color: var(--m3-on-surface-variant);
+                }
+                .monthly-task-strip {
+                  font-size: 9px;
+                  font-weight: 800;
+                  padding: 2px 6px;
+                  border-radius: 6px;
+                  margin-bottom: 2px;
+                  overflow: hidden;
+                  text-overflow: ellipsis;
+                  white-space: nowrap;
+                  max-width: 100%;
+                  box-shadow: 0 1px 2px rgba(0,0,0,0.05);
+                }
+                .monthly-today .monthly-day-num {
+                  background: var(--m3-primary);
+                  color: var(--m3-on-primary);
+                  box-shadow: 0 2px 4px var(--m3-primary);
+                }
+                .monthly-other-month { opacity: 0.35; }
+                .monthly-selected-cell { 
+                  background: var(--m3-primary-container) !important;
+                  box-shadow: inset 0 0 0 2px var(--m3-primary);
+                }
+                .monthly-selected-cell .monthly-day-num {
+                  color: var(--m3-on-primary-container);
+                }
+              `}</style>
+              {calendarView === 'yearly' ? (
+                <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4 p-4 md:p-6 overflow-y-auto max-h-[600px] w-full bg-[var(--m3-surface)]">
+                  {Array.from({ length: 12 }).map((_, i) => {
+                    const monthDate = new Date((selectedDate || new Date()).getFullYear(), i, 1);
+                    
+                    const startDate = startOfWeek(monthDate, { locale: language === 'ja' ? ja : undefined });
+                    const monthEnd = endOfMonth(monthDate);
+                    const weekEnd = endOfWeek(monthEnd, { locale: language === 'ja' ? ja : undefined });
+                    
+                    const rows = [];
+                    let day = startDate;
+                    
+                    while (day <= weekEnd) {
+                      const cells = [];
+                      for (let j = 0; j < 7; j++) {
+                        const dateClone = new Date(day);
+                        const isSelected = selectedDate && isSameDay(dateClone, selectedDate);
+                        const isCurrentMonth = isSameMonth(dateClone, monthDate);
+                        const hasTask = !!tasksByDate[format(dateClone, 'yyyy-MM-dd')];
+                        const isTod = isToday(dateClone);
+                        
+                        cells.push(
+                          <DroppableDateCell
+                            key={dateClone.toISOString()}
+                            id={`date-${format(dateClone, 'yyyy-MM-dd')}`}
+                            className={cn(
+                              "w-full aspect-square flex flex-col items-center justify-center rounded-lg transition-all cursor-pointer relative",
+                              !isCurrentMonth ? "opacity-30" : "hover:bg-[var(--m3-surface-container-highest)]",
+                              isSelected && isCurrentMonth && !isTod ? "bg-[var(--m3-primary-container)] text-[var(--m3-on-primary-container)] hover:bg-[var(--m3-primary-container)]" : "",
+                              isTod ? "bg-[var(--m3-primary)] text-[var(--m3-on-primary)] hover:bg-[var(--m3-primary)]" : "",
+                              isTod && isSelected ? "ring-2 ring-[var(--m3-primary)] ring-offset-1 ring-offset-[var(--m3-surface-container-high)]" : ""
+                            )}
+                            onClick={() => {
+                              setSelectedDate(dateClone);
+                              setCalendarView('monthly');
+                            }}
+                          >
+                            <span className="text-[10px] font-bold leading-none pointer-events-none">{dateClone.getDate()}</span>
+                            {hasTask && isCurrentMonth && (
+                              <div className={cn(
+                                "absolute bottom-1 w-1 h-1 rounded-full pointer-events-none",
+                                isSelected || isTod ? "bg-current opacity-70" : "bg-[var(--m3-primary)]"
+                              )} />
+                            )}
+                          </DroppableDateCell>
+                        );
+                        
+                        day = addDays(day, 1);
+                      }
+                      rows.push(<div key={day.toISOString()} className="grid grid-cols-7 gap-0.5">{cells}</div>);
+                    }
+
+                    return (
+                      <div key={i} className="flex flex-col space-y-2 bg-[var(--m3-surface-container-lowest)] p-3 rounded-2xl border border-[var(--m3-outline-variant)]/20 shadow-sm">
+                        <div className="text-sm font-black text-center text-[var(--m3-on-surface)]">
+                          {format(monthDate, language === 'ja' ? 'M月' : 'MMMM')}
+                        </div>
+                        <div className="grid grid-cols-7 gap-0.5 text-[8px] font-black text-center text-[var(--m3-on-surface-variant)] uppercase tracking-widest mb-1">
+                          {(language === 'ja' ? ['日', '月', '火', '水', '木', '金', '土'] : ['S', 'M', 'T', 'W', 'T', 'F', 'S']).map(d => <div key={d}>{d}</div>)}
+                        </div>
+                        <div className="flex flex-col space-y-0.5">
+                          {rows}
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              ) : calendarView === 'weekly' ? (
+                <div className="flex flex-col h-full w-full min-h-[400px]">
+                  <div className="grid grid-cols-7 flex-1">
+                    {(() => {
+                      const start = startOfWeek(selectedDate || new Date(), { locale: language === 'ja' ? ja : undefined });
+                      const cols = [];
+                      for (let i = 0; i < 7; i++) {
+                        const dateClone = addDays(start, i);
+                        const dateStr = format(dateClone, 'yyyy-MM-dd');
+                        const isSelected = selectedDate && isSameDay(dateClone, selectedDate);
+                        const isTod = isToday(dateClone);
+                        const dayTasks = tasksByDate[dateStr] || [];
+
+                        cols.push(
+                          <DroppableDateCell
+                            key={dateStr}
+                            id={`date-${dateStr}`}
+                            className={cn(
+                              "border-r border-[var(--m3-outline-variant)]/30 last:border-r-0 flex flex-col p-2 sm:p-3 gap-3 transition-all appearance-none text-left h-full cursor-pointer",
+                              isSelected ? "bg-[var(--m3-primary-container)]/20" : "hover:bg-[var(--m3-surface-container)]"
+                            )}
+                            onClick={() => setSelectedDate(dateClone)}
+                          >
+                            <div className="flex flex-col items-center w-full gap-1.5 pb-3 border-b border-[var(--m3-outline-variant)]/30">
+                              <span className={cn(
+                                "text-[10px] font-black uppercase tracking-widest",
+                                isTod || isSelected ? "text-[var(--m3-primary)]" : "text-[var(--m3-on-surface-variant)]"
+                              )}>
+                                {format(dateClone, language === 'ja' ? 'E' : 'EEE', { locale: language === 'ja' ? ja : undefined })}
+                              </span>
+                              <div className={cn(
+                                "w-8 h-8 sm:w-10 sm:h-10 rounded-full flex items-center justify-center text-sm sm:text-base font-bold shadow-sm transition-all",
+                                isSelected ? "bg-[var(--m3-primary-container)] text-[var(--m3-on-primary-container)] ring-2 ring-[var(--m3-primary)] ring-offset-2 ring-offset-[var(--m3-surface-container-high)]" : 
+                                isTod ? "bg-[var(--m3-primary)] text-[var(--m3-on-primary)]" : 
+                                "bg-[var(--m3-surface)] text-[var(--m3-on-surface)] border border-[var(--m3-outline-variant)]/30 group-hover:border-[var(--m3-outline-variant)]/60"
+                              )}>
+                                {dateClone.getDate()}
+                              </div>
+                            </div>
+                            
+                            <div className="flex flex-col gap-2 w-full flex-1">
+                              {dayTasks.map(task => (
+                                <DraggableTaskRender 
+                                  key={task.id} 
+                                  id={`task-${task.id}`}
+                                  disabled
+                                  className={cn(
+                                    "p-2 sm:p-2.5 rounded-xl border-l-4 shadow-sm w-full text-left transition-all",
+                                    task.status === 'completed' 
+                                      ? "bg-[var(--m3-surface)] border-l-[var(--m3-outline)] opacity-60" 
+                                      : "bg-[var(--m3-surface-container-lowest)] border-l-[var(--m3-primary)] hover:shadow-md cursor-grab active:cursor-grabbing"
+                                  )}
+                                >
+                                  <div className={cn(
+                                    "text-xs sm:text-sm font-bold line-clamp-2",
+                                    task.status === 'completed' ? "text-[var(--m3-on-surface-variant)] line-through" : "text-[var(--m3-on-surface)]"
+                                  )}>
+                                    {task.title}
+                                  </div>
+                                </DraggableTaskRender>
+                              ))}
+                              {dayTasks.length === 0 && (
+                                <div className="text-[10px] text-[var(--m3-on-surface-variant)] opacity-50 text-center py-4 font-bold flex-1 flex flex-col justify-center">
+                                  -
+                                </div>
+                              )}
+                            </div>
+                          </DroppableDateCell>
+                        );
+                      }
+                      return cols;
+                    })()}
+                  </div>
+                </div>
+              ) : (
+                <div className="monthly-grid">
+                  <div className="monthly-header">
+                    {(language === 'ja' ? ['日', '月', '火', '水', '木', '金', '土'] : ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat']).map(day => (
+                      <div key={day} className="monthly-header-cell">{day}</div>
+                    ))}
+                  </div>
+                  {(() => {
+                    const monthStart = startOfMonth(selectedDate || new Date());
+                    const startDate = startOfWeek(monthStart, { locale: language === 'ja' ? ja : undefined });
+                    const monthEnd = endOfMonth(selectedDate || new Date());
+                    const weekEnd = endOfWeek(monthEnd, { locale: language === 'ja' ? ja : undefined });
+                    
+                    const rows = [];
+                    let day = startDate;
+                    
+                    while (day <= weekEnd) {
+                      const cells = [];
+                      for (let i = 0; i < 7; i++) {
+                        const dateClone = new Date(day);
+                        const dateStr = format(dateClone, 'yyyy-MM-dd');
+                        const isSelected = selectedDate && isSameDay(dateClone, selectedDate);
+                        const isCurrentMonth = isSameMonth(dateClone, selectedDate || new Date());
+                        const dayTasks = tasksByDate[dateStr] || [];
+
+                        cells.push(
+                          <DroppableDateCell 
+                            key={dateStr}
+                            id={`date-${dateStr}`}
+                            onClick={() => setSelectedDate(dateClone)}
+                            className={cn(
+                              "border-r border-b border-[var(--m3-outline-variant)]/30 last:border-r-0 min-h-[120px] flex flex-col p-1 sm:p-2 transition-all appearance-none text-left cursor-pointer hover:bg-[var(--m3-surface-container)] relative z-0",
+                              !isCurrentMonth && "opacity-40 bg-[var(--m3-surface-container-low)]/30",
+                              isSelected && "bg-[var(--m3-primary-container)]/10 ring-2 ring-inset ring-[var(--m3-primary)]/50 z-10",
+                              isToday(dateClone) && "bg-[var(--m3-primary)]/5"
+                            )}
+                          >
+                            <div className="flex justify-between items-start mb-1">
+                              <span className={cn(
+                                "text-xs sm:text-sm font-bold w-6 h-6 sm:w-7 sm:h-7 flex items-center justify-center rounded-full mt-0.5 ml-0.5",
+                                isToday(dateClone) ? "bg-[var(--m3-primary)] text-[var(--m3-on-primary)]" : "text-[var(--m3-on-surface)]",
+                                isSelected && !isToday(dateClone) ? "bg-[var(--m3-primary-container)] text-[var(--m3-on-primary-container)]" : ""
+                              )}>{dateClone.getDate()}</span>
+                            </div>
+                            <div className="flex-1 space-y-0.5 min-w-0">
+                              {dayTasks.slice(0, 4).map(task => (
+                                <DraggableTaskRender 
+                                  key={task.id} 
+                                  id={`task-${task.id}`}
+                                  disabled
+                                  className={cn(
+                                    "text-[9px] sm:text-[10px] px-1 sm:px-1.5 py-0.5 rounded border border-transparent truncate cursor-grab active:cursor-grabbing font-bold transition-all",
+                                    task.status === 'completed'
+                                      ? "bg-[var(--m3-surface-variant)]/50 text-[var(--m3-on-surface-variant)] opacity-50 line-through"
+                                      : "bg-[var(--m3-primary)]/10 text-[var(--m3-primary)] hover:bg-[var(--m3-primary)]/20"
+                                  )}
+                                >
+                                  {task.title}
+                                </DraggableTaskRender>
+                              ))}
+                              {dayTasks.length > 4 && (
+                                <div className="text-[7px] font-black text-[var(--m3-on-surface-variant)] opacity-40 pl-1">
+                                  +{dayTasks.length - 4}
+                                </div>
+                              )}
+                            </div>
+                          </DroppableDateCell>
+                        );
+                        day = addDays(day, 1);
+                      }
+                      rows.push(<div key={day.toISOString()} className="monthly-row">{cells}</div>);
+                    }
+                    return rows;
+                  })()}
+                </div>
+              )}
+            </div>
+            
+            {/* Drag & Drop Coming Soon Banner */}
+            <motion.div 
+              initial={{ opacity: 0, scale: 0.95 }}
+              animate={{ opacity: 1, scale: 1 }}
+              className="mx-2 p-6 rounded-[32px] bg-[var(--m3-primary)]/5 border-2 border-dashed border-[var(--m3-primary)]/20 flex flex-col items-center justify-center text-center gap-4 group hover:bg-[var(--m3-primary)]/10 transition-colors"
+            >
+              <div className="w-16 h-16 rounded-[24px] bg-[var(--m3-primary)]/10 flex items-center justify-center text-[var(--m3-primary)] shadow-inner transition-transform group-hover:scale-110 duration-500">
+                <MousePointer2 className="w-8 h-8" />
+              </div>
+              <div className="space-y-2">
+                <h4 className="text-lg font-black text-[var(--m3-primary)] tracking-tight">
+                  {language === 'ja' ? 'ドラッグ＆ドロップ機能 近日公開！' : 'Drag & Drop Coming Soon!'}
+                </h4>
+                <p className="text-sm font-bold text-[var(--m3-on-surface-variant)] leading-relaxed max-w-[320px] mx-auto opacity-80">
+                  {language === 'ja' 
+                    ? 'タスクをカレンダーの各日付へ直接ドラッグしてスケジュールできる機能を現在開発中です。お楽しみに！' 
+                    : 'We are working hard to allow you to drag tasks directly onto the calendar. Stay tuned!'}
+                </p>
+              </div>
+            </motion.div>
+
+            {/* Task List for Selected Date */}
+            <div className="space-y-4 pb-8">
+              <div className="flex items-center justify-between px-2">
+                <h3 className="text-sm font-black text-[var(--m3-on-surface-variant)] uppercase tracking-wider">
+                  {selectedDate ? format(selectedDate, language === 'ja' ? 'M月d日のタスク' : 'Tasks for MMM d', { locale: language === 'ja' ? ja : undefined }) : '---'}
+                </h3>
+                <span className="text-[10px] font-black px-2 py-0.5 rounded-full bg-[var(--m3-primary)]/10 text-[var(--m3-primary)]">
+                  {selectedDateSubmissions.length}
+                </span>
+              </div>
+              
+              {selectedDateSubmissions.length > 0 ? (
+                <div className="space-y-3">
+                  {selectedDateSubmissions.map((sub, idx) => (
+                    <motion.div
+                      key={sub.id}
+                      initial={{ opacity: 0, y: 10 }}
+                      animate={{ opacity: 1, y: 0 }}
+                      transition={{ delay: idx * 0.05 }}
+                      onClick={() => {
+                        setSelectedId(sub.id);
+                        
+                      }}
+                    >
+                      <DraggableTaskRender
+                        id={`task-${sub.id}`}
+                        disabled
+                        className="group p-4 rounded-3xl bg-[var(--m3-surface-container)] border border-[var(--m3-outline)]/5 hover:border-[var(--m3-primary)]/20 hover:bg-[var(--m3-surface-container-highest)] transition-all cursor-grab active:cursor-grabbing flex items-center gap-4"
+                      >
+                        <div className={cn(
+                          "w-10 h-10 rounded-2xl flex items-center justify-center shrink-0 shadow-sm transition-all group-hover:scale-105",
+                          sub.status === 'completed' ? "bg-green-500/10 text-green-500" : "bg-[var(--m3-primary)]/5 text-[var(--m3-primary)]"
+                        )}>
+                          {sub.status === 'completed' ? <CheckCircle2 className="w-5 h-5" /> : <Clock className="w-5 h-5" />}
+                        </div>
+                        <div className="flex-1 min-w-0 pointer-events-none">
+                          <div className="flex items-center gap-2 mb-0.5">
+                            <span className="text-[10px] font-black uppercase tracking-tighter text-[var(--m3-primary)] opacity-70 truncate max-w-[80px]">{sub.subject}</span>
+                            {sub.priority === 'high' && <div className="w-1 h-1 rounded-full bg-red-500" />}
+                          </div>
+                          <h4 className="text-sm font-bold text-[var(--m3-on-surface)] truncate group-hover:text-[var(--m3-primary)] transition-colors">{sub.title}</h4>
+                        </div>
+                        <div className="text-right shrink-0 pointer-events-none">
+                          <div className="text-sm font-black text-[var(--m3-on-surface-variant)]">{sub.progress}%</div>
+                          <div className="w-12 h-1 bg-[var(--m3-outline-variant)]/40 rounded-full mt-1 overflow-hidden">
+                            <div 
+                              className="h-full bg-[var(--m3-primary)] transition-all duration-1000" 
+                              style={{ width: `${sub.progress}%` }} 
+                            />
+                          </div>
+                        </div>
+                      </DraggableTaskRender>
+                    </motion.div>
+                  ))}
+                </div>
+              ) : (
+                <div className="py-12 rounded-[32px] border-2 border-dashed border-[var(--m3-outline-variant)]/20 flex flex-col items-center justify-center text-center p-6 grayscale opacity-40">
+                  <div className="w-16 h-16 rounded-full bg-[var(--m3-surface-container)] flex items-center justify-center mb-4">
+                    <Calendar className="w-8 h-8 text-[var(--m3-on-surface-variant)]" />
+                  </div>
+                  <p className="text-sm font-bold text-[var(--m3-on-surface-variant)]">
+                    {language === 'ja' ? 'この日のタスクはありません' : 'No tasks for this day'}
+                  </p>
+                </div>
+              )}
+            </div>
+
+            {/* Unscheduled Tasks */}
+            <div className="space-y-4 pb-8 mt-8 border-t border-[var(--m3-outline-variant)]/20 pt-8">
+              <div className="flex items-center justify-between px-2">
+                <h3 className="text-sm font-black text-[var(--m3-on-surface-variant)] uppercase tracking-wider">
+                  {language === 'ja' ? '未スケジュールのタスク' : 'Unscheduled Tasks'}
+                </h3>
+                <span className="text-[10px] font-black px-2 py-0.5 rounded-full bg-[var(--m3-secondary)]/10 text-[var(--m3-secondary)]">
+                  {unscheduledSubmissions.length}
+                </span>
+              </div>
+              
+              {unscheduledSubmissions.length > 0 ? (
+                <div className="space-y-3">
+                  {unscheduledSubmissions.map((sub, idx) => (
+                    <motion.div
+                      key={sub.id}
+                      initial={{ opacity: 0, y: 10 }}
+                      animate={{ opacity: 1, y: 0 }}
+                      transition={{ delay: idx * 0.05 }}
+                      onClick={() => {
+                        setSelectedId(sub.id);
+                      }}
+                    >
+                      <DraggableTaskRender
+                        id={`task-${sub.id}`}
+                        disabled
+                        className="group p-4 rounded-3xl bg-[var(--m3-surface-container)] border border-[var(--m3-outline)]/5 hover:border-[var(--m3-primary)]/20 hover:bg-[var(--m3-surface-container-highest)] transition-all cursor-grab active:cursor-grabbing flex items-center gap-4"
+                      >
+                        <div className={cn(
+                          "w-10 h-10 rounded-2xl flex items-center justify-center shrink-0 shadow-sm transition-all group-hover:scale-105",
+                          sub.status === 'completed' ? "bg-green-500/10 text-green-500" : "bg-[var(--m3-primary)]/5 text-[var(--m3-primary)]"
+                        )}>
+                          {sub.status === 'completed' ? <CheckCircle2 className="w-5 h-5" /> : <Clock className="w-5 h-5" />}
+                        </div>
+                        <div className="flex-1 min-w-0 pointer-events-none">
+                          <div className="flex items-center gap-2 mb-0.5">
+                            <span className="text-[10px] font-black uppercase tracking-tighter text-[var(--m3-primary)] opacity-70 truncate max-w-[80px]">{sub.subject}</span>
+                            {sub.priority === 'high' && <div className="w-1 h-1 rounded-full bg-red-500" />}
+                          </div>
+                          <h4 className="text-sm font-bold text-[var(--m3-on-surface)] truncate group-hover:text-[var(--m3-primary)] transition-colors">{sub.title}</h4>
+                        </div>
+                        <div className="text-right shrink-0 pointer-events-none">
+                          <div className="text-sm font-black text-[var(--m3-on-surface-variant)]">{sub.progress}%</div>
+                          <div className="w-12 h-1 bg-[var(--m3-outline-variant)]/40 rounded-full mt-1 overflow-hidden">
+                            <div 
+                              className="h-full bg-[var(--m3-primary)] transition-all duration-1000" 
+                              style={{ width: `${sub.progress}%` }} 
+                            />
+                          </div>
+                        </div>
+                      </DraggableTaskRender>
+                    </motion.div>
+                  ))}
+                </div>
+              ) : (
+                <div className="py-8 rounded-[32px] border border-dashed border-[var(--m3-outline-variant)]/20 flex flex-col items-center justify-center text-center p-6 opacity-60">
+                  <p className="text-xs font-bold text-[var(--m3-on-surface-variant)]">
+                    {language === 'ja' ? 'すべてのタスクがスケジュール済みです 🎉' : 'All tasks are scheduled 🎉'}
+                  </p>
+                </div>
+              )}
+            </div>
+
+          </div>
+          
+          <div className="p-6 bg-[var(--m3-surface-container)] border-t border-[var(--m3-outline-variant)]/20">
+            <button 
+              onClick={() => setIsCalendarOpen(false)}
+              className="w-full py-4 rounded-2xl bg-[var(--m3-primary)] text-[var(--m3-on-primary)] font-black text-sm shadow-lg shadow-[var(--m3-primary)]/20 transition-all hover:scale-[1.02] active:scale-[0.98]"
+            >
+              {language === 'ja' ? '閉じる' : 'Close'}
+            </button>
+          </div>
+          </DndContext>
+        </motion.div>
+      </>
+    )}
+  </AnimatePresence>
+
   {/* Settings Modal */}
   <AnimatePresence>
     {isSettingsOpen && (
@@ -1795,13 +2472,19 @@ export default function App() {
               <label className="text-xs font-black text-[var(--m3-on-surface-variant)] uppercase tracking-[0.2em] px-1">{t.language}</label>
               <div className="segmented-control">
                 <button 
-                  onClick={() => setLanguage('ja')}
+                  onClick={() => {
+                    setLanguage('ja');
+                    syncSettings({ language: 'ja' });
+                  }}
                   className={cn("segmented-item", language === 'ja' ? "segmented-item-active" : "segmented-item-inactive")}
                 >
                   日本語
                 </button>
                 <button 
-                  onClick={() => setLanguage('en')}
+                  onClick={() => {
+                    setLanguage('en');
+                    syncSettings({ language: 'en' });
+                  }}
                   className={cn("segmented-item", language === 'en' ? "segmented-item-active" : "segmented-item-inactive")}
                 >
                   English
@@ -1860,6 +2543,7 @@ export default function App() {
                             key={th.id}
                             onClick={() => {
                               setTheme(th.id as any);
+                              syncSettings({ theme: th.id as any });
                               setIsThemeDropdownOpen(false);
                             }}
                             className={cn(
@@ -1905,7 +2589,9 @@ export default function App() {
                             title: t.editSubjects,
                             message: msg,
                             onConfirm: () => {
-                              setSubjects(subjects.filter(s => s !== subject));
+                              const newSubs = subjects.filter(s => s !== subject);
+                              setSubjects(newSubs);
+                              syncSettings({ subjects: newSubs });
                               setConfirmDialog(null);
                             },
                             onCancel: () => setConfirmDialog(null)
@@ -1926,7 +2612,9 @@ export default function App() {
                   onKeyDown={(e) => {
                     if (e.key === 'Enter' && newSubject.trim()) {
                       if (!subjects.includes(newSubject.trim())) {
-                        setSubjects([...subjects, newSubject.trim()]);
+                        const newSubs = [...subjects, newSubject.trim()];
+                        setSubjects(newSubs);
+                        syncSettings({ subjects: newSubs });
                         setNewSubject("");
                       } else {
                         showToast(language === 'ja' ? 'その教科は既に存在します' : 'Subject already exists');
@@ -1938,7 +2626,9 @@ export default function App() {
                   onClick={() => {
                     if (newSubject.trim()) {
                       if (!subjects.includes(newSubject.trim())) {
-                        setSubjects([...subjects, newSubject.trim()]);
+                        const newSubs = [...subjects, newSubject.trim()];
+                        setSubjects(newSubs);
+                        syncSettings({ subjects: newSubs });
                         setNewSubject("");
                       } else {
                         showToast(language === 'ja' ? 'その教科は既に存在します' : 'Subject already exists');
@@ -2003,7 +2693,7 @@ export default function App() {
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
             transition={{ duration: 0.2, ease: "easeOut" }}
-            className="fixed inset-0 z-50 flex items-center justify-center p-4 sm:p-6"
+            className="fixed inset-0 z-[170] flex items-center justify-center p-4 sm:p-6"
           >
             <div 
               onClick={() => setSelectedId(null)}
@@ -2138,13 +2828,12 @@ export default function App() {
                       </>
                     )}
                     
-                    {!selectedSubmission.isDeleted && (
+                    {!selectedSubmission.isDeleted && activeTab !== 'history' && (
                       <button 
                         onClick={() => {
                           setEditData(selectedSubmission);
                           setModalPriority(selectedSubmission.priority);
                           setSelectedDate(selectedSubmission.deadline);
-                          setIsCalendarOpen(false);
                           setIsEditing(true);
                           setSelectedId(null);
                         }}
@@ -2155,7 +2844,7 @@ export default function App() {
                       </button>
                     )}
 
-                    {selectedSubmission.status !== 'completed' && !selectedSubmission.isDeleted && (
+                    {selectedSubmission.status !== 'completed' && !selectedSubmission.isDeleted && activeTab !== 'history' && (
                       <button 
                         onClick={(e) => {
                           toggleComplete(selectedSubmission.id, e as any);
@@ -2197,7 +2886,7 @@ export default function App() {
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
             transition={{ duration: 0.2, ease: "easeOut" }}
-            className="fixed inset-0 z-[60] flex items-end sm:items-center justify-center p-0 sm:p-6"
+            className="fixed inset-0 z-[180] flex items-end sm:items-center justify-center p-0 sm:p-6"
           >
             <div 
               onClick={() => setIsAdding(false)}
@@ -2681,7 +3370,7 @@ export default function App() {
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
             transition={{ duration: 0.2, ease: "easeOut" }}
-            className="fixed inset-0 z-[60] flex items-end sm:items-center justify-center p-0 sm:p-6"
+            className="fixed inset-0 z-[180] flex items-end sm:items-center justify-center p-0 sm:p-6"
           >
             <div 
               onClick={() => {
@@ -3291,6 +3980,20 @@ function SubmissionCard({
     </motion.div>
   );
 }
+
+const MemoizedSubmissionCard = React.memo(SubmissionCard, (prev, next) => {
+  return prev.submission.id === next.submission.id &&
+         prev.submission.progress === next.submission.progress &&
+         prev.submission.status === next.submission.status &&
+         prev.submission.title === next.submission.title &&
+         prev.submission.subject === next.submission.subject &&
+         prev.submission.deadline?.getTime() === next.submission.deadline?.getTime() &&
+         prev.isHistoryView === next.isHistoryView &&
+         prev.language === next.language &&
+         prev.theme === next.theme &&
+         prev.isSelectionMode === next.isSelectionMode &&
+         prev.isSelected === next.isSelected;
+});
 
 function SortableSubjectItem({ subject, onDelete, language, t }: { 
   subject: string; 

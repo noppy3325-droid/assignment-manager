@@ -1,4 +1,5 @@
 import { initializeApp } from 'firebase/app';
+import { getAnalytics } from 'firebase/analytics';
 import { getAuth, GoogleAuthProvider, signInWithPopup, signOut, onAuthStateChanged, User } from 'firebase/auth';
 import { 
   getFirestore, 
@@ -22,6 +23,7 @@ import {
 import firebaseConfig from '../../firebase-applet-config.json';
 
 const app = initializeApp(firebaseConfig);
+const analytics = typeof window !== 'undefined' ? getAnalytics(app) : null;
 
 // Initialize Firestore with persistent cache for better "rational" usage (offline support, multi-tab sync)
 export const db = initializeFirestore(app, {
@@ -47,6 +49,7 @@ export {
   orderBy,
   Timestamp,
   serverTimestamp,
-  getDocFromServer
+  getDocFromServer,
+  analytics
 };
 export type { User };

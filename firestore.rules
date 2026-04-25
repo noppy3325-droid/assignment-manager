@@ -53,10 +53,11 @@ service cloud.firestore {
     }
 
     function isValidUserConfig(data) {
-      return data.keys().hasOnly(['theme', 'language', 'subjects']) &&
-             (!('theme' in data) || data.theme in ['light', 'dark']) &&
+      return data.keys().hasOnly(['theme', 'language', 'subjects', 'pomodoroDurations']) &&
+             (!('theme' in data) || data.theme in ['light', 'dark', 'dog', 'cat', 'animal', 'flower']) &&
              (!('language' in data) || data.language in ['ja', 'en', 'vi']) &&
-             (!('subjects' in data) || data.subjects is list);
+             (!('subjects' in data) || data.subjects is list) &&
+             (!('pomodoroDurations' in data) || (data.pomodoroDurations is map && data.pomodoroDurations.work is number && data.pomodoroDurations.break is number));
     }
 
     // ===============================================================
