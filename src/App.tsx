@@ -1,8 +1,8 @@
 import React, { useState, useEffect, useMemo, useRef, useCallback } from 'react';
 import { motion, AnimatePresence, LayoutGroup } from 'motion/react';
-import { Plus, Calendar, BookOpen, CheckCircle2, Clock, ChevronRight, ChevronDown, X, Settings, LogOut, LogIn, Trash2, Sun, Moon, Zap, Play, Pause, Square, CheckSquare, Edit3, Coffee, Brain, Eye, EyeOff, AlertCircle, Dog, Cat, Bird, TreePine, PawPrint, Rabbit, Flower, Flower2, MousePointer2 } from 'lucide-react';
+import { Plus, Calendar, BookOpen, CheckCircle2, Clock, ChevronRight, ChevronDown, X, Settings, LogOut, LogIn, Trash2, Sun, Moon, Zap, Play, Pause, Square, CheckSquare, Edit3, Coffee, Brain, Eye, EyeOff, AlertCircle, Dog, Cat, Bird, TreePine, PawPrint, Rabbit, Flower, Flower2, MousePointer2, Menu } from 'lucide-react';
 import { format, differenceInDays, isPast, isToday, startOfDay, formatDistanceToNow, startOfWeek, endOfWeek, startOfMonth, endOfMonth, addDays, isSameMonth, isSameDay } from 'date-fns';
-import { ja } from 'date-fns/locale';
+import { ja, enUS, vi } from 'date-fns/locale';
 import { DayPicker } from 'react-day-picker';
 import 'react-day-picker/dist/style.css';
 import confetti from 'canvas-confetti';
@@ -14,8 +14,10 @@ import {
   useSensor,
   useSensors,
   DragEndEvent,
+  DragStartEvent,
   useDraggable,
-  useDroppable
+  useDroppable,
+  DragOverlay
 } from '@dnd-kit/core';
 import {
   arrayMove,
@@ -127,56 +129,129 @@ const DEFAULT_SUBJECTS = [
   "世界史", "日本史", "地理", "現代社会", "倫理", "政治・経済", "情報", "その他"
 ];
 
-const APP_VERSION = '1.3.0';
+const APP_VERSION = '1.3.1';
 
 const RELEASE_NOTES = {
-  version: '1.3.0',
-  title: "🎉 メジャーアップデート！ (v1.3.0)",
+  version: '1.3.1',
+  title: "🚀 アップデート情報 (v1.3.1)",
   features: {
-    title: "✨ アップデート内容",
+    title: "✨ 修正・改善内容",
     items: [
-      "新テーマの追加：いぬ、ねこ、サファリ（アニマル）、フラワーのテーマを追加しました",
-      "UI/UXの刷新：テーマ切り替えを使いやすいドロップダウン形式に変更し、全体的なデザインをブラッシュアップしました",
-      "新機能：待望のカレンダー表示機能を追加しました",
-      "利用規約の常時確認：設定画面からいつでも規約を確認できるようになりました",
-      "バグ修正：軽微なバグの修正とパフォーマンスの向上を行いました"
+      "デスクトップ版のヘッダーにカレンダー・設定・ログアウトボタンを追加しました",
+      "モバイル版メニューを刷新し、操作ボタンを画面下部にコンパクトに配置しました",
+      "「進行中/アーカイブ」タブをサイドバー（デスクトップ）に移動し、メイン画面をスッキリさせました",
+      "モバイル版のタスク一覧に適切な余白を追加し、視認性を向上させました",
+      "ドラッグ＆ドロップ時の表示を改善し、移動中のタスクが見やすくなりました",
+      "メニュー内の一部表記（カレンダー等）の日本語化を修正しました"
     ]
   }
 };
 
 const TERMS_OF_SERVICE = {
-  title: "🚀 Submission-Manager アプリ概要",
-  intro: "「進捗を可視化し、提出期限を逃さない。」\n\nSubmission-Managerは、日々の課題や提出物を一括管理し、学習効率を最大化するために開発された進捗管理ツールです。",
-  features: {
-    title: "📌 主な機能",
-    items: [
-      "タスク・課題の進捗管理: 0%〜100%のステータスで進行状況をリアルタイムに把握。",
-      "期限通知システム: 残り日数や期限間近のタスクをひと目で確認可能。",
-      "科目・カテゴリー別フィルタ: 整理された表示で、迷わずタスクに着手。"
-    ]
+  ja: {
+    title: "🚀 Submission-Manager アプリ概要",
+    intro: "「進捗を可視化し、提出期限を逃さない。」\n\nSubmission-Managerは、日々の課題や提出物を一括管理し、学習効率を最大化するために開発された進捗管理ツールです。",
+    features: {
+      title: "📌 主な機能",
+      items: [
+        "タスク・課題の進捗管理: 0%〜100%のステータスで進行状況をリアルタイムに把握。",
+        "期限通知システム: 残り日数や期限間近のタスクをひと目で確認可能。",
+        "科目・カテゴリー別フィルタ: 整理された表示で、迷わずタスクに着手。"
+      ]
+    },
+    terms: {
+      title: "📝 ご利用規約および免責事項",
+      intro: "本アプリの利用にあたり、以下の内容を必ずご確認ください。",
+      sections: [
+        {
+          title: "1. サービスの継続性について",
+          content: "本アプリは Google Firebase および無料枠のサーバー資源を利用して運用されています。\n\n無料枠の制限やプラットフォームの仕様変更により、予告なくサービスの停止、または一部機能が利用できなくなる可能性があります。あらかじめご了承ください。"
+        },
+        {
+          title: "2. プライバシーと個人情報の取り扱い",
+          content: "個人情報の非保持: 当アプリでは、アカウント情報（氏名・メールアドレス等）や、作成されたタスクの具体的な内容、その他個人を特定できる情報は一切取得・保持いたしません。\n\nデータの匿名性: 入力されたデータはブラウザまたはプラットフォーム上の匿名化された領域で処理されます。"
+        },
+        {
+          title: "3. フィードバックと学術利用",
+          content: "ユーザーの皆様からいただいたフィードバックや、統計的な利用状況データ（個人を特定しない形のもの）は、学術的な発表や研究、開発報告等に使用させていただく場合があります。"
+        },
+        {
+          title: "4. 免責事項",
+          content: "本アプリの使用によって生じた損害（データの消失、期限の失念等）について、開発者は一切の責任を負いかねます。重要なタスクについては、適宜バックアップや併用管理をお勧めいたします。"
+        }
+      ],
+      footer: "ログインすることで、利用規約および免責事項に同意したものとみなされます。"
+    }
   },
-  terms: {
-    title: "📝 ご利用規約および免責事項",
-    intro: "本アプリの利用にあたり、以下の内容を必ずご確認ください。",
-    sections: [
-      {
-        title: "1. サービスの継続性について",
-        content: "本アプリは Google Firebase および無料枠のサーバー資源を利用して運用されています。\n\n無料枠の制限やプラットフォームの仕様変更により、予告なくサービスの停止、または一部機能が利用できなくなる可能性があります。あらかじめご了承ください。"
-      },
-      {
-        title: "2. プライバシーと個人情報の取り扱い",
-        content: "個人情報の非保持: 当アプリでは、アカウント情報（氏名・メールアドレス等）や、作成されたタスクの具体的な内容、その他個人を特定できる情報は一切取得・保持いたしません。\n\nデータの匿名性: 入力されたデータはブラウザまたはプラットフォーム上の匿名化された領域で処理されます。"
-      },
-      {
-        title: "3. フィードバックと学術利用",
-        content: "ユーザーの皆様からいただいたフィードバックや、統計的な利用状況データ（個人を特定しない形のもの）は、学術的な発表や研究、開発報告等に使用させていただく場合があります。"
-      },
-      {
-        title: "4. 免責事項",
-        content: "本アプリの使用によって生じた損害（データの消失、期限の失念等）について、開発者は一切の責任を負いかねます。重要なタスクについては、適宜バックアップや併用管理をお勧めいたします。"
-      }
-    ],
-    footer: "ログインすることで、利用規約および免責事項に同意したものとみなされます。"
+  en: {
+    title: "🚀 Submission-Manager Overview",
+    intro: "\"Visualize progress and never miss a deadline.\"\n\nSubmission-Manager is a progress management tool developed to manage daily tasks and assignments centrally and maximize learning efficiency.",
+    features: {
+      title: "📌 Main Features",
+      items: [
+        "Task/Assignment Progress Tracking: View progress in real-time with statuses from 0% to 100%.",
+        "Deadline Notification System: Easily check remaining days and upcoming tasks at a glance.",
+        "Subject/Category Filtering: Start tasks without hesitation using an organized display."
+      ]
+    },
+    terms: {
+      title: "📝 Terms of Service and Disclaimer",
+      intro: "Please review the following before using this application.",
+      sections: [
+        {
+          title: "1. Service Continuity",
+          content: "This app is operated using Google Firebase and free tier server resources.\n\nPlease note that services may be suspended or features may become unavailable without prior notice due to free tier limitations or platform changes."
+        },
+        {
+          title: "2. Privacy and Data Handling",
+          content: "No Personal Data Storage: We do not collect or store account information (names, emails) or specific task content.\n\nData Anonymity: Entered data is processed anonymously in your browser or on the platform."
+        },
+        {
+          title: "3. Feedback and Academic Use",
+          content: "Feedback and statistical usage data (non-personally identifiable) may be used for academic presentations, research, or development reports."
+        },
+        {
+          title: "4. Disclaimer",
+          content: "The developers shall not be held responsible for any damages (data loss, missed deadlines, etc.) resulting from the use of this app. We recommend keeping backups and parallel management for critical tasks."
+        }
+      ],
+      footer: "By logging in, you agree to these Terms of Service and Disclaimer."
+    }
+  },
+  vi: {
+    title: "🚀 Tổng quan về Submission-Manager",
+    intro: "\"Trực quan hóa tiến độ, không bao giờ trễ hạn.\"\n\nSubmission-Manager là một công cụ giúp quản lý tập trung các công việc và bài tập hàng ngày nhằm tối đa hóa hiệu quả học tập.",
+    features: {
+      title: "📌 Tính năng chính",
+      items: [
+        "Quản lý tiến độ Công việc/Bài tập: Theo dõi tiến độ theo thời gian thực từ 0% đến 100%.",
+        "Hệ thống thông báo Hạn chót: Dễ dàng kiểm tra số ngày còn lại và công việc sắp đến hạn.",
+        "Lọc theo Môn học/Danh mục: Bắt đầu công việc mà không do dự nhờ giao diện được sắp xếp hợp lý."
+      ]
+    },
+    terms: {
+      title: "📝 Điều khoản dịch vụ và Khước từ trách nhiệm",
+      intro: "Vui lòng xem kỹ các nội dung sau trước khi sử dụng ứng dụng.",
+      sections: [
+        {
+          title: "1. Tính liên tục của Dịch vụ",
+          content: "Ứng dụng này hoạt động bằng Google Firebase và tài nguyên máy chủ gói miễn phí.\n\nXin lưu ý rằng dịch vụ có thể bị tạm dừng hoặc một số tính năng có thể không khả dụng mà không cần báo trước do giới hạn của gói miễn phí hoặc thay đổi nền tảng."
+        },
+        {
+          title: "2. Quyền riêng tư và Xử lý Dữ liệu",
+          content: "Không lưu trữ Dữ liệu Cá nhân: Ứng dụng này không thu thập hay lưu trữ thông tin tài khoản (tên, email, v.v...) hoặc nội dung công việc cụ thể.\n\nTính Ẩn danh: Dữ liệu được xử lý ẩn danh trên trình duyệt hoặc trên nền tảng."
+        },
+        {
+          title: "3. Phản hồi và Sử dụng trong Học thuật",
+          content: "Phản hồi và dữ liệu thống kê sử dụng (không xác định danh tính cá nhân) có thể được sử dụng cho các bài thuyết trình học thuật, nghiên cứu hoặc báo cáo phát triển."
+        },
+        {
+          title: "4. Khước từ trách nhiệm",
+          content: "Nhà phát triển sẽ không chịu trách nhiệm cho bất kỳ thiệt hại nào (mất dữ liệu, trễ hạn, v.v...) phát sinh từ việc sử dụng ứng dụng này. Đối với các công việc quan trọng, bạn nên sao lưu thường xuyên và có phương án quản lý dự phòng."
+        }
+      ],
+      footer: "Bằng việc đăng nhập, bạn đồng ý với các Điều khoản dịch vụ và Khước từ trách nhiệm nêu trên."
+    }
   }
 };
 
@@ -194,15 +269,10 @@ const DroppableDateCell: React.FC<{ id: string, children: React.ReactNode, class
 };
 
 const DraggableTaskRender: React.FC<{ id: string, children: React.ReactNode, className?: string, disabled?: boolean }> = ({ id, children, className, disabled }) => {
-  const { attributes, listeners, setNodeRef, transform, isDragging } = useDraggable({ id, disabled });
-  const style = transform ? {
-    transform: CSS.Translate.toString(transform),
-    zIndex: 9999,
-  } : undefined;
+  const { attributes, listeners, setNodeRef, isDragging } = useDraggable({ id, disabled });
   return (
     <div 
       ref={setNodeRef} 
-      style={style} 
       {...(disabled ? {} : listeners)} 
       {...(disabled ? {} : attributes)} 
       className={cn(className, !disabled && isDragging && "opacity-50 cursor-grabbing")}
@@ -218,11 +288,15 @@ export default function App() {
   const [isAuthReady, setIsAuthReady] = useState(false);
   const [submissions, setSubmissions] = useState<Submission[]>([]);
   const [selectedId, setSelectedId] = useState<string | null>(null);
+  const [isRepeatEnabled, setIsRepeatEnabled] = useState(false);
+  const [repeatType, setRepeatType] = useState<'daily' | 'weekly' | 'monthly'>('weekly');
+  const [repeatCount, setRepeatCount] = useState(2);
   const [isAdding, setIsAdding] = useState(false);
   const [isEditing, setIsEditing] = useState(false);
   const [editData, setEditData] = useState<Submission | null>(null);
   const [selectedDate, setSelectedDate] = useState<Date | undefined>(new Date());
   const [isCalendarOpen, setIsCalendarOpen] = useState(false);
+  const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
   const [calendarView, setCalendarView] = useState<'monthly' | 'weekly' | 'yearly'>('monthly');
   const [addTaskType, setAddTaskType] = useState<'pages' | 'percentage'>('percentage');
   const [activeTab, setActiveTab] = useState<'active' | 'history'>('active');
@@ -307,7 +381,18 @@ export default function App() {
     }
   }
 
+  const [activeDragTaskId, setActiveDragTaskId] = useState<string | null>(null);
+
+  const handleDragStart = (event: DragStartEvent) => {
+    setActiveDragTaskId(String(event.active.id));
+  };
+
+  const handleDragCancel = () => {
+    setActiveDragTaskId(null);
+  };
+
   const handleCalendarDragEnd = async (event: DragEndEvent) => {
+    setActiveDragTaskId(null);
     const { active, over } = event;
     if (!over) return;
     
@@ -837,23 +922,38 @@ export default function App() {
     const combinedDate = new Date(y, m - 1, d, hours, minutes, 0, 0);
 
     try {
-      await addDoc(collection(db, 'submissions'), {
-        uid: user.uid,
-        title,
-        subject,
-        deadline: Timestamp.fromDate(combinedDate),
-        description: description || '',
-        priority: priority || 'medium',
-        progress: 0,
-        status: 'pending',
-        createdAt: serverTimestamp(),
-        taskType,
-        startPage: taskType === 'pages' ? startPage : null,
-        endPage: taskType === 'pages' ? endPage : null,
-        currentPage: taskType === 'pages' ? startPage : 0,
-        activityLogs: []
-      });
+      const promises = [];
+      const repeatTimes = isRepeatEnabled ? repeatCount : 1;
+      
+      for (let i = 0; i < repeatTimes; i++) {
+        const dClone = new Date(combinedDate);
+        if (isRepeatEnabled) {
+          if (repeatType === 'daily') dClone.setDate(dClone.getDate() + i);
+          if (repeatType === 'weekly') dClone.setDate(dClone.getDate() + (i * 7));
+          if (repeatType === 'monthly') dClone.setMonth(dClone.getMonth() + i);
+        }
+        promises.push(addDoc(collection(db, 'submissions'), {
+          uid: user.uid,
+          title,
+          subject,
+          deadline: Timestamp.fromDate(dClone),
+          description: description || '',
+          priority: priority || 'medium',
+          progress: 0,
+          status: 'pending',
+          createdAt: serverTimestamp(),
+          taskType,
+          startPage: taskType === 'pages' ? startPage : null,
+          endPage: taskType === 'pages' ? endPage : null,
+          currentPage: taskType === 'pages' ? startPage : 0,
+          activityLogs: []
+        }));
+      }
+      await Promise.all(promises);
       setIsAdding(false);
+      setIsRepeatEnabled(false);
+      setRepeatType('weekly');
+      setRepeatCount(2);
       setSelectedDate(new Date());
     } catch (error) {
       handleFirestoreError(error, OperationType.CREATE, 'submissions');
@@ -942,18 +1042,15 @@ export default function App() {
 
     setConfirmDialog({
       title: language === 'ja' ? 'タスクを削除' : 'Delete Task',
-      message: language === 'ja' ? 'このタスクをゴミ箱に移動しますか？' : 'Move this task to trash?',
+      message: language === 'ja' ? 'このタスクを完全に削除しますか？' : 'Delete this task permanently?',
       onConfirm: async () => {
         try {
-          await updateDoc(doc(db, 'submissions', submission.id), {
-            isDeleted: true,
-            deletedAt: serverTimestamp()
-          });
+          await deleteDoc(doc(db, 'submissions', submission.id));
           setConfirmDialog(null);
           setSelectedId(null);
           showToast(language === 'ja' ? 'タスクを削除しました' : 'Task deleted');
         } catch (error) {
-          handleFirestoreError(error, OperationType.UPDATE, `submissions/${submission.id}`);
+          handleFirestoreError(error, OperationType.DELETE, `submissions/${submission.id}`);
         }
       },
       onCancel: () => setConfirmDialog(null)
@@ -1082,18 +1179,18 @@ export default function App() {
               className="flex-1 overflow-y-auto p-5 sm:p-8 scrollbar-custom space-y-6 text-slate-800"
             >
               <div className="space-y-4">
-                <h3 className="text-lg font-black text-slate-900">{TERMS_OF_SERVICE.title}</h3>
+                <h3 className="text-lg font-black text-slate-900">{TERMS_OF_SERVICE[language].title}</h3>
                 <p className="text-sm font-semibold leading-relaxed whitespace-pre-wrap text-slate-700">
-                  {TERMS_OF_SERVICE.intro}
+                  {TERMS_OF_SERVICE[language].intro}
                 </p>
               </div>
 
               <div className="space-y-4">
                 <h3 className="text-base font-black flex items-center gap-2 text-slate-900">
-                   {TERMS_OF_SERVICE.features.title}
+                   {TERMS_OF_SERVICE[language].features.title}
                 </h3>
                 <ul className="space-y-3">
-                  {TERMS_OF_SERVICE.features.items.map((item, idx) => (
+                  {TERMS_OF_SERVICE[language].features.items.map((item, idx) => (
                     <li key={idx} className="flex gap-3 text-sm font-bold text-slate-700">
                       <div className="mt-1.5 w-1.5 h-1.5 rounded-full bg-[var(--m3-primary)] shrink-0" />
                       {item}
@@ -1103,10 +1200,10 @@ export default function App() {
               </div>
 
               <div className="space-y-6 pt-6 border-t border-slate-100">
-                <h3 className="text-lg font-black text-slate-900">{TERMS_OF_SERVICE.terms.title}</h3>
-                <p className="text-xs font-bold text-slate-500 italic">{TERMS_OF_SERVICE.terms.intro}</p>
+                <h3 className="text-lg font-black text-slate-900">{TERMS_OF_SERVICE[language].terms.title}</h3>
+                <p className="text-xs font-bold text-slate-500 italic">{TERMS_OF_SERVICE[language].terms.intro}</p>
                 
-                {TERMS_OF_SERVICE.terms.sections.map((section, idx) => (
+                {TERMS_OF_SERVICE[language].terms.sections.map((section, idx) => (
                   <div key={idx} className="space-y-2">
                     <h4 className="text-sm font-black text-[var(--m3-primary)]">{section.title}</h4>
                     <p className="text-sm font-semibold leading-relaxed text-slate-700 whitespace-pre-wrap">
@@ -1118,7 +1215,7 @@ export default function App() {
 
               <div className="p-4 rounded-2xl bg-slate-50 border border-slate-200">
                 <p className="text-xs font-black leading-relaxed text-[var(--m3-primary)] text-center">
-                  {TERMS_OF_SERVICE.terms.footer}
+                  {TERMS_OF_SERVICE[language].terms.footer}
                 </p>
               </div>
             </div>
@@ -1252,6 +1349,111 @@ export default function App() {
       </div>
     );
   }
+
+  const SidebarContent = () => (
+    <div className="flex flex-col h-full">
+      <div className="flex flex-col gap-6 lg:gap-8 flex-1">
+        {/* Sidebar Tabs - Moved from Main */}
+        <motion.div 
+          initial={{ opacity: 0, scale: 0.95 }}
+          animate={{ opacity: 1, scale: 1 }}
+          transition={{ duration: 0.4, ease: "easeOut" }}
+          className="segmented-control w-full shrink-0"
+        >
+          <button 
+            onClick={() => {
+              setActiveTab('active');
+              setSubjectFilter(null);
+              setIsMobileMenuOpen(false);
+            }}
+            className={cn(
+              "segmented-item",
+              activeTab === 'active' ? "segmented-item-active" : "segmented-item-inactive"
+            )}
+          >
+            <Clock className="w-4 h-4" />
+            {t.active}
+          </button>
+          <button 
+            onClick={() => {
+              setActiveTab('history');
+              setSubjectFilter(null);
+              setIsMobileMenuOpen(false);
+            }}
+            className={cn(
+              "segmented-item",
+              activeTab === 'history' ? "segmented-item-active" : "segmented-item-inactive"
+            )}
+          >
+            <BookOpen className="w-4 h-4" />
+            {t.archive}
+          </button>
+        </motion.div>
+
+        <motion.div 
+          initial={{ opacity: 0, y: 10 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.4, ease: "easeOut" }}
+          className="bg-[var(--m3-primary-container)] rounded-[28px] p-6 w-full shadow-sm shrink-0"
+        >
+          <div className="text-xs text-[var(--m3-on-primary-container)] opacity-70 uppercase tracking-[0.15em] font-black mb-1">{t.progress}</div>
+          <div className="flex items-baseline gap-1 text-[var(--m3-on-primary-container)]">
+            <span className="text-4xl font-light tracking-tighter">{overallProgress}</span>
+            <span className="text-sm font-bold opacity-70">%</span>
+          </div>
+          <div className="h-2 w-full bg-[var(--m3-on-primary-container)]/10 rounded-full mt-4 overflow-hidden shrink-0">
+            <motion.div 
+              initial={{ width: 0 }}
+              animate={{ width: `${overallProgress}%` }}
+              transition={{ duration: 1, ease: [0.34, 1.56, 0.64, 1] }}
+              className="h-full bg-[var(--m3-primary)]"
+            />
+          </div>
+        </motion.div>
+
+        <motion.div 
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ delay: 0.1, duration: 0.4, ease: "easeOut" }}
+          className="bg-[var(--m3-surface-container-high)] rounded-[28px] p-6 w-full shadow-sm border border-[var(--m3-outline-variant)]/20 shrink-0"
+        >
+          <div className="text-xs text-[var(--m3-on-surface-variant)] uppercase tracking-wider font-black mb-2">{t.upcoming}</div>
+          <div className="text-3xl lg:text-4xl font-light tracking-tighter text-[var(--m3-on-surface)]">
+            {nearestDeadlinesCount.toString().padStart(2, '0')}
+          </div>
+          <div className="text-xs font-bold text-[var(--m3-on-surface-variant)] opacity-60 mt-1">{language === 'ja' ? '今後48時間以内' : 'Within 48 hours'}</div>
+        </motion.div>
+
+        <motion.div 
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ delay: 0.2, duration: 0.4, ease: "easeOut" }}
+          className="m3-card w-full shadow-none border border-[var(--m3-outline)]/10 flex flex-col shrink-0"
+        >
+          <div className="text-xs text-[var(--m3-on-surface-variant)] uppercase tracking-wider font-bold mb-3">{t.recentActivity}</div>
+          <div className="space-y-3">
+            {recentActivities.length > 0 ? (
+              recentActivities.map(log => (
+                <div key={log.id} className="border-l-2 border-[var(--m3-primary)]/30 pl-2.5 py-0.5">
+                  <div className="text-xs font-bold text-[var(--m3-on-surface)] line-clamp-1">{log.taskTitle}</div>
+                  <div className="flex items-center gap-1.5 mt-0.5">
+                    <span className="text-xs text-[var(--m3-on-surface-variant)] font-medium">
+                      {formatDistanceToNow(log.timestamp.toDate(), { addSuffix: true, locale: language === 'ja' ? ja : language === 'vi' ? vi : enUS })}
+                    </span>
+                    <span className="text-xs text-[var(--m3-primary)] font-bold">
+                      +{log.progressIncrement}{log.type === 'pages' ? 'p' : '%'}
+                    </span>
+                  </div>
+                </div>
+              ))
+            ) : (
+              <div className="text-xs text-[var(--m3-on-surface-variant)] italic">{t.noActivity}</div>
+            )}
+          </div>
+        </motion.div>
+      </div>
+    </div>
+  );
 
   return (
     <div className="relative min-h-screen w-full overflow-hidden bg-[var(--m3-surface)] text-[var(--m3-on-surface)]">
@@ -1415,9 +1617,17 @@ export default function App() {
             initial={{ opacity: 0, x: -20 }}
             animate={{ opacity: 1, x: 0 }}
             transition={{ duration: 0.4, ease: "easeOut" }}
-            className="flex items-center gap-3 sm:gap-4"
+            className="flex items-center gap-2 sm:gap-4 min-w-0 flex-1"
           >
-            <div className="w-10 h-10 sm:w-12 sm:h-12 rounded-2xl bg-[var(--m3-primary)] flex items-center justify-center text-[var(--m3-on-primary)] shadow-lg shadow-[var(--m3-primary)]/20 overflow-hidden relative">
+            <button 
+              onClick={() => setIsMobileMenuOpen(true)}
+              className="lg:hidden p-1.5 sm:p-3 rounded-full hover:bg-[var(--m3-surface-container)] text-[var(--m3-on-surface-variant)] transition-all active:scale-95 shrink-0"
+              title={language === 'ja' ? 'メニュー' : 'Menu'}
+            >
+              <Menu className="w-5 h-5 sm:w-6 sm:h-6" />
+            </button>
+
+            <div className="w-10 h-10 sm:w-12 sm:h-12 rounded-2xl bg-[var(--m3-primary)] flex shrink-0 items-center justify-center text-[var(--m3-on-primary)] shadow-lg shadow-[var(--m3-primary)]/20 overflow-hidden relative">
               {theme === 'dog' ? <Dog className="w-6 h-6 sm:w-7 sm:h-7" /> :
                theme === 'cat' ? <Cat className="w-6 h-6 sm:w-7 sm:h-7" /> :
                theme === 'animal' ? <Rabbit className="w-6 h-6 sm:w-7 sm:h-7" /> :
@@ -1431,10 +1641,10 @@ export default function App() {
                  <PawPrint className="w-full h-full p-2" />
                </motion.div>
             </div>
-            <div>
-              <h1 className="text-xl sm:text-2xl font-black tracking-tight text-[var(--m3-on-surface)]">{t.appName}</h1>
+            <div className="min-w-0">
+              <h1 className="text-lg sm:text-2xl font-black tracking-tight text-[var(--m3-on-surface)] truncate">{t.appName}</h1>
               <p className="text-[10px] sm:text-xs text-[var(--m3-on-surface-variant)]/60 mt-0.5 font-black uppercase tracking-widest leading-none">
-                {format(new Date(), language === 'ja' ? 'M月d日 (EEEE)' : 'MMMM d (EEEE)', { locale: language === 'ja' ? ja : undefined })}
+                {format(new Date(), language === 'ja' ? 'M月d日 (EEEE)' : 'MMMM d (EEEE)', { locale: language === 'ja' ? ja : language === 'vi' ? vi : enUS })}
               </p>
             </div>
           </motion.div>
@@ -1442,30 +1652,32 @@ export default function App() {
             initial={{ opacity: 0, x: 20 }}
             animate={{ opacity: 1, x: 0 }}
             transition={{ duration: 0.4, ease: "easeOut" }}
-            className="flex items-center gap-1 sm:gap-3"
+            className="flex items-center gap-1 sm:gap-3 shrink-0"
           >
-            <button 
-              onClick={() => setIsCalendarOpen(true)}
-              className="p-3 rounded-full hover:bg-[var(--m3-surface-container)] text-[var(--m3-on-surface-variant)] transition-all active:scale-95"
-              title={language === 'ja' ? 'カレンダー' : 'Calendar'}
-            >
-              <Calendar className="w-5 h-5 sm:w-6 sm:h-6" />
-            </button>
-            <button 
-              onClick={() => setIsSettingsOpen(true)}
-              className="p-3 rounded-full hover:bg-[var(--m3-surface-container)] text-[var(--m3-on-surface-variant)] transition-all active:scale-95"
-              title={t.settings}
-            >
-              <Settings className="w-5 h-5 sm:w-6 sm:h-6" />
-            </button>
-            <button 
-              onClick={logout}
-              className="p-3 rounded-full hover:bg-[var(--m3-error-container)]/50 text-[var(--m3-on-surface-variant)] hover:text-[var(--m3-error)] transition-all active:scale-95"
-              title={t.logout}
-            >
-              <LogOut className="w-5 h-5 sm:w-6 sm:h-6" />
-            </button>
-            <div className="w-10 h-10 sm:w-12 sm:h-12 rounded-full m3-card p-0 flex items-center justify-center overflow-hidden border-2 border-[var(--m3-primary)]/20 shadow-sm ml-2">
+            <div className="hidden lg:flex items-center gap-2 mr-2">
+              <button 
+                onClick={() => setIsCalendarOpen(true)}
+                className="p-3 rounded-full hover:bg-[var(--m3-surface-container)] text-[var(--m3-on-surface-variant)] transition-all active:scale-95"
+                title={language === 'ja' ? 'カレンダー' : 'Calendar'}
+              >
+                <Calendar className="w-6 h-6" />
+              </button>
+              <button 
+                onClick={() => setIsSettingsOpen(true)}
+                className="p-3 rounded-full hover:bg-[var(--m3-surface-container)] text-[var(--m3-on-surface-variant)] transition-all active:scale-95"
+                title={t.settings}
+              >
+                <Settings className="w-6 h-6" />
+              </button>
+              <button 
+                onClick={logout}
+                className="p-3 rounded-full hover:bg-[var(--m3-error-container)]/50 text-[var(--m3-on-surface-variant)] hover:text-[var(--m3-error)] transition-all active:scale-95"
+                title={t.logout}
+              >
+                <LogOut className="w-6 h-6" />
+              </button>
+            </div>
+            <div className="w-8 h-8 sm:w-12 sm:h-12 rounded-full m3-card p-0 flex items-center justify-center overflow-hidden border-2 border-[var(--m3-primary)]/20 shadow-sm ml-1 sm:ml-2 shrink-0">
               {user.photoURL ? (
                 <img src={user.photoURL} alt={user.displayName || ''} className="w-full h-full object-cover" referrerPolicy="no-referrer" />
               ) : (
@@ -1479,115 +1691,19 @@ export default function App() {
 
         <div className="flex-1 flex flex-col lg:grid lg:grid-cols-[300px_1fr] gap-8 lg:gap-10 overflow-hidden">
           {/* Sidebar */}
-          <aside className="flex flex-row lg:flex-col gap-6 lg:gap-8 overflow-x-auto lg:overflow-y-auto pb-6 lg:pb-0 lg:pr-4 lg:border-r border-[var(--m3-outline-variant)]/40">
-            <motion.div 
-              initial={{ opacity: 0, scale: 0.95 }}
-              animate={{ opacity: 1, scale: 1 }}
-              transition={{ duration: 0.4, ease: "easeOut" }}
-              className="segmented-control w-full min-w-[280px] lg:min-w-0"
-            >
-              <button 
-                onClick={() => {
-                  setActiveTab('active');
-                  setSubjectFilter(null);
-                }}
-                className={cn(
-                  "segmented-item",
-                  activeTab === 'active' ? "segmented-item-active" : "segmented-item-inactive"
-                )}
-              >
-                <Clock className="w-4 h-4" />
-                {t.active}
-              </button>
-              <button 
-                onClick={() => {
-                  setActiveTab('history');
-                  setSubjectFilter(null);
-                }}
-                className={cn(
-                  "segmented-item",
-                  activeTab === 'history' ? "segmented-item-active" : "segmented-item-inactive"
-                )}
-              >
-                <BookOpen className="w-4 h-4" />
-                {t.archive}
-              </button>
-            </motion.div>
-
-            <div className="hidden lg:block h-px bg-[var(--m3-outline)]/20 my-2" />
-
-            <motion.div 
-              initial={{ opacity: 0, y: 10 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ duration: 0.4, ease: "easeOut" }}
-              className="bg-[var(--m3-primary-container)] rounded-[28px] p-6 w-full min-w-[180px] lg:min-w-0 shadow-sm shrink-0"
-            >
-              <div className="text-xs text-[var(--m3-on-primary-container)] opacity-70 uppercase tracking-[0.15em] font-black mb-1">{t.progress}</div>
-              <div className="flex items-baseline gap-1 text-[var(--m3-on-primary-container)]">
-                <span className="text-4xl font-light tracking-tighter">{overallProgress}</span>
-                <span className="text-sm font-bold opacity-70">%</span>
-              </div>
-              <div className="h-2 w-full bg-[var(--m3-on-primary-container)]/10 rounded-full mt-4 overflow-hidden">
-                <motion.div 
-                  initial={{ width: 0 }}
-                  animate={{ width: `${overallProgress}%` }}
-                  transition={{ duration: 1, ease: [0.34, 1.56, 0.64, 1] }}
-                  className="h-full bg-[var(--m3-primary)]"
-                />
-              </div>
-            </motion.div>
-
-            <motion.div 
-              initial={{ opacity: 0, y: 20 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ delay: 0.1, duration: 0.4, ease: "easeOut" }}
-              className="bg-[var(--m3-surface-container-high)] rounded-[28px] p-6 w-full min-w-[220px] lg:min-w-0 shadow-sm border border-[var(--m3-outline-variant)]/20 shrink-0"
-            >
-              <div className="text-xs text-[var(--m3-on-surface-variant)] uppercase tracking-wider font-black mb-2">{t.upcoming}</div>
-              <div className="text-3xl lg:text-4xl font-light tracking-tighter text-[var(--m3-on-surface)]">
-                {nearestDeadlinesCount.toString().padStart(2, '0')}
-              </div>
-              <div className="text-xs font-bold text-[var(--m3-on-surface-variant)] opacity-60 mt-1">{language === 'ja' ? '今後48時間以内' : 'Within 48 hours'}</div>
-            </motion.div>
-
-            <motion.div 
-              initial={{ opacity: 0, y: 20 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ delay: 0.2, duration: 0.4, ease: "easeOut" }}
-              className="m3-card w-full min-w-[220px] lg:min-w-0 shadow-none border border-[var(--m3-outline)]/10 hidden sm:flex flex-col shrink-0 mb-8"
-            >
-              <div className="text-xs text-[var(--m3-on-surface-variant)] uppercase tracking-wider font-bold mb-3">{t.recentActivity}</div>
-              <div className="space-y-3">
-                {recentActivities.length > 0 ? (
-                  recentActivities.map(log => (
-                    <div key={log.id} className="border-l-2 border-[var(--m3-primary)]/30 pl-2.5 py-0.5">
-                      <div className="text-xs font-bold text-[var(--m3-on-surface)] line-clamp-1">{log.taskTitle}</div>
-                      <div className="flex items-center gap-1.5 mt-0.5">
-                        <span className="text-xs text-[var(--m3-on-surface-variant)] font-medium">
-                          {formatDistanceToNow(log.timestamp.toDate(), { addSuffix: true, locale: language === 'ja' ? ja : undefined })}
-                        </span>
-                        <span className="text-xs text-[var(--m3-primary)] font-bold">
-                          +{log.progressIncrement}{log.type === 'pages' ? 'p' : '%'}
-                        </span>
-                      </div>
-                    </div>
-                  ))
-                ) : (
-                  <div className="text-xs text-[var(--m3-on-surface-variant)] italic">{t.noActivity}</div>
-                )}
-              </div>
-            </motion.div>
+          <aside className="hidden lg:flex flex-col gap-6 lg:gap-8 overflow-y-auto pb-0 pr-4 border-r border-[var(--m3-outline-variant)]/40">
+            <SidebarContent />
           </aside>
 
           {/* Main Content */}
-      <main className="flex-1 overflow-y-auto pb-24 lg:pb-20 lg:pr-2">
+      <main className="flex-1 overflow-y-auto pb-24 lg:pb-20 px-4 lg:px-0 lg:pr-2">
         {/* Subject Filter Bar */}
-        <div className="mb-4 py-1">
-          <div className="flex flex-wrap gap-2 px-2">
+        <div className="mb-4 py-1 flex items-center w-full max-w-full">
+          <div className="flex overflow-x-auto gap-2 px-2 no-scrollbar snap-x w-full">
             <button
               onClick={() => setSubjectFilter(null)}
               className={cn(
-                "px-5 py-2.5 rounded-2xl text-xs font-black uppercase tracking-widest transition-all active:scale-95",
+                "px-5 py-2.5 rounded-2xl text-xs font-black uppercase tracking-widest transition-all active:scale-95 shrink-0 snap-start",
                 subjectFilter === null 
                   ? "bg-[var(--m3-primary)] text-[var(--m3-on-primary)] shadow-md" 
                   : "bg-[var(--m3-surface-container-high)] text-[var(--m3-on-surface-variant)] border border-[var(--m3-outline)]/10 hover:bg-[var(--m3-surface-container-highest)]"
@@ -1605,7 +1721,7 @@ export default function App() {
                   key={subject}
                   onClick={() => setSubjectFilter(subjectFilter === subject ? null : subject)}
                   className={cn(
-                    "px-5 py-2.5 rounded-2xl text-xs font-black uppercase tracking-widest transition-all active:scale-95",
+                    "px-5 py-2.5 rounded-2xl text-xs font-black uppercase tracking-widest transition-all active:scale-95 shrink-0 snap-start",
                     subjectFilter === subject 
                       ? "bg-[var(--m3-primary)] text-[var(--m3-on-primary)] shadow-md" 
                       : "bg-[var(--m3-surface-container-high)] text-[var(--m3-on-surface-variant)] border border-[var(--m3-outline)]/10 hover:bg-[var(--m3-surface-container-highest)]"
@@ -1801,16 +1917,13 @@ export default function App() {
                                   } else {
                                     setConfirmDialog({
                                       title: language === 'ja' ? 'タスクの削除' : 'Delete Task',
-                                      message: language === 'ja' ? 'このタスクを非表示にしますか？(履歴には残ります)' : 'Hide this task? (It will remain in history)',
+                                      message: language === 'ja' ? 'このタスクを完全に削除しますか？' : 'Delete this task permanently?',
                                       onConfirm: async () => {
                                         try {
-                                          await updateDoc(doc(db, 'submissions', submission.id), {
-                                            isDeleted: true,
-                                            deletedAt: serverTimestamp()
-                                          });
+                                          await deleteDoc(doc(db, 'submissions', submission.id));
                                           setConfirmDialog(null);
                                         } catch (error) {
-                                          handleFirestoreError(error, OperationType.UPDATE, `submissions/${submission.id}`);
+                                          handleFirestoreError(error, OperationType.DELETE, `submissions/${submission.id}`);
                                         }
                                       },
                                       onCancel: () => setConfirmDialog(null)
@@ -1866,10 +1979,10 @@ export default function App() {
           animate={{ x: 0 }}
           exit={{ x: '100%' }}
           transition={{ type: 'spring', damping: 25, stiffness: 200 }}
-          className="fixed top-0 right-0 h-full w-full lg:max-w-[800px] sm:rounded-l-[32px] bg-[var(--m3-surface-container-high)] shadow-2xl z-[160] overflow-y-auto flex flex-col"
+          className="fixed top-0 right-0 h-full w-full lg:max-w-[800px] sm:rounded-l-[32px] bg-[var(--m3-surface-container-high)] shadow-2xl z-[160] flex flex-col overflow-hidden"
         >
-          <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleCalendarDragEnd} autoScroll={false}>
-            <div className="p-4 sm:p-6 flex items-center justify-between border-b border-[var(--m3-outline-variant)]/40">
+          <DndContext sensors={sensors} collisionDetection={closestCenter} onDragStart={handleDragStart} onDragEnd={handleCalendarDragEnd} onDragCancel={handleDragCancel}>
+            <div className="p-4 sm:p-6 flex items-center justify-between border-b border-[var(--m3-outline-variant)]/40 shrink-0 bg-[var(--m3-surface-container-high)] z-10">
             <div className="flex items-center gap-3">
               <div className="w-10 h-10 rounded-2xl bg-[var(--m3-primary-container)] flex items-center justify-center text-[var(--m3-on-primary-container)]">
                 <Calendar className="w-6 h-6" />
@@ -1922,7 +2035,7 @@ export default function App() {
               {calendarView === 'monthly' && (
                 <div className="flex items-center justify-between px-2 bg-[var(--m3-surface-container)] rounded-2xl p-2 border border-[var(--m3-outline-variant)]/10">
                   <div className="text-sm font-black text-[var(--m3-on-surface)]">
-                    {selectedDate ? format(selectedDate, language === 'ja' ? 'yyyy年 M月' : 'MMMM yyyy', { locale: language === 'ja' ? ja : undefined }) : '---'}
+                    {selectedDate ? format(selectedDate, language === 'ja' ? 'yyyy年 M月' : 'MMMM yyyy', { locale: language === 'ja' ? ja : language === 'vi' ? vi : enUS }) : '---'}
                   </div>
                   <div className="flex items-center gap-1">
                     <button 
@@ -2063,9 +2176,9 @@ export default function App() {
                   {Array.from({ length: 12 }).map((_, i) => {
                     const monthDate = new Date((selectedDate || new Date()).getFullYear(), i, 1);
                     
-                    const startDate = startOfWeek(monthDate, { locale: language === 'ja' ? ja : undefined });
+                    const startDate = startOfWeek(monthDate, { locale: language === 'ja' ? ja : language === 'vi' ? vi : enUS });
                     const monthEnd = endOfMonth(monthDate);
-                    const weekEnd = endOfWeek(monthEnd, { locale: language === 'ja' ? ja : undefined });
+                    const weekEnd = endOfWeek(monthEnd, { locale: language === 'ja' ? ja : language === 'vi' ? vi : enUS });
                     
                     const rows = [];
                     let day = startDate;
@@ -2129,7 +2242,7 @@ export default function App() {
                 <div className="flex flex-col h-full w-full min-h-[400px]">
                   <div className="grid grid-cols-7 flex-1">
                     {(() => {
-                      const start = startOfWeek(selectedDate || new Date(), { locale: language === 'ja' ? ja : undefined });
+                      const start = startOfWeek(selectedDate || new Date(), { locale: language === 'ja' ? ja : language === 'vi' ? vi : enUS });
                       const cols = [];
                       for (let i = 0; i < 7; i++) {
                         const dateClone = addDays(start, i);
@@ -2153,7 +2266,7 @@ export default function App() {
                                 "text-[10px] font-black uppercase tracking-widest",
                                 isTod || isSelected ? "text-[var(--m3-primary)]" : "text-[var(--m3-on-surface-variant)]"
                               )}>
-                                {format(dateClone, language === 'ja' ? 'E' : 'EEE', { locale: language === 'ja' ? ja : undefined })}
+                                {format(dateClone, language === 'ja' ? 'E' : 'EEE', { locale: language === 'ja' ? ja : language === 'vi' ? vi : enUS })}
                               </span>
                               <div className={cn(
                                 "w-8 h-8 sm:w-10 sm:h-10 rounded-full flex items-center justify-center text-sm sm:text-base font-bold shadow-sm transition-all",
@@ -2170,7 +2283,6 @@ export default function App() {
                                 <DraggableTaskRender 
                                   key={task.id} 
                                   id={`task-${task.id}`}
-                                  disabled
                                   className={cn(
                                     "p-2 sm:p-2.5 rounded-xl border-l-4 shadow-sm w-full text-left transition-all",
                                     task.status === 'completed' 
@@ -2208,9 +2320,9 @@ export default function App() {
                   </div>
                   {(() => {
                     const monthStart = startOfMonth(selectedDate || new Date());
-                    const startDate = startOfWeek(monthStart, { locale: language === 'ja' ? ja : undefined });
+                    const startDate = startOfWeek(monthStart, { locale: language === 'ja' ? ja : language === 'vi' ? vi : enUS });
                     const monthEnd = endOfMonth(selectedDate || new Date());
-                    const weekEnd = endOfWeek(monthEnd, { locale: language === 'ja' ? ja : undefined });
+                    const weekEnd = endOfWeek(monthEnd, { locale: language === 'ja' ? ja : language === 'vi' ? vi : enUS });
                     
                     const rows = [];
                     let day = startDate;
@@ -2248,7 +2360,6 @@ export default function App() {
                                 <DraggableTaskRender 
                                   key={task.id} 
                                   id={`task-${task.id}`}
-                                  disabled
                                   className={cn(
                                     "text-[9px] sm:text-[10px] px-1 sm:px-1.5 py-0.5 rounded border border-transparent truncate cursor-grab active:cursor-grabbing font-bold transition-all",
                                     task.status === 'completed'
@@ -2277,32 +2388,13 @@ export default function App() {
               )}
             </div>
             
-            {/* Drag & Drop Coming Soon Banner */}
-            <motion.div 
-              initial={{ opacity: 0, scale: 0.95 }}
-              animate={{ opacity: 1, scale: 1 }}
-              className="mx-2 p-6 rounded-[32px] bg-[var(--m3-primary)]/5 border-2 border-dashed border-[var(--m3-primary)]/20 flex flex-col items-center justify-center text-center gap-4 group hover:bg-[var(--m3-primary)]/10 transition-colors"
-            >
-              <div className="w-16 h-16 rounded-[24px] bg-[var(--m3-primary)]/10 flex items-center justify-center text-[var(--m3-primary)] shadow-inner transition-transform group-hover:scale-110 duration-500">
-                <MousePointer2 className="w-8 h-8" />
-              </div>
-              <div className="space-y-2">
-                <h4 className="text-lg font-black text-[var(--m3-primary)] tracking-tight">
-                  {language === 'ja' ? 'ドラッグ＆ドロップ機能 近日公開！' : 'Drag & Drop Coming Soon!'}
-                </h4>
-                <p className="text-sm font-bold text-[var(--m3-on-surface-variant)] leading-relaxed max-w-[320px] mx-auto opacity-80">
-                  {language === 'ja' 
-                    ? 'タスクをカレンダーの各日付へ直接ドラッグしてスケジュールできる機能を現在開発中です。お楽しみに！' 
-                    : 'We are working hard to allow you to drag tasks directly onto the calendar. Stay tuned!'}
-                </p>
-              </div>
-            </motion.div>
+
 
             {/* Task List for Selected Date */}
             <div className="space-y-4 pb-8">
               <div className="flex items-center justify-between px-2">
                 <h3 className="text-sm font-black text-[var(--m3-on-surface-variant)] uppercase tracking-wider">
-                  {selectedDate ? format(selectedDate, language === 'ja' ? 'M月d日のタスク' : 'Tasks for MMM d', { locale: language === 'ja' ? ja : undefined }) : '---'}
+                  {selectedDate ? format(selectedDate, language === 'ja' ? 'M月d日のタスク' : "'Tasks for' MMM d", { locale: language === 'ja' ? ja : language === 'vi' ? vi : enUS }) : '---'}
                 </h3>
                 <span className="text-[10px] font-black px-2 py-0.5 rounded-full bg-[var(--m3-primary)]/10 text-[var(--m3-primary)]">
                   {selectedDateSubmissions.length}
@@ -2324,7 +2416,6 @@ export default function App() {
                     >
                       <DraggableTaskRender
                         id={`task-${sub.id}`}
-                        disabled
                         className="group p-4 rounded-3xl bg-[var(--m3-surface-container)] border border-[var(--m3-outline)]/5 hover:border-[var(--m3-primary)]/20 hover:bg-[var(--m3-surface-container-highest)] transition-all cursor-grab active:cursor-grabbing flex items-center gap-4"
                       >
                         <div className={cn(
@@ -2390,7 +2481,6 @@ export default function App() {
                     >
                       <DraggableTaskRender
                         id={`task-${sub.id}`}
-                        disabled
                         className="group p-4 rounded-3xl bg-[var(--m3-surface-container)] border border-[var(--m3-outline)]/5 hover:border-[var(--m3-primary)]/20 hover:bg-[var(--m3-surface-container-highest)] transition-all cursor-grab active:cursor-grabbing flex items-center gap-4"
                       >
                         <div className={cn(
@@ -2438,6 +2528,24 @@ export default function App() {
               {language === 'ja' ? '閉じる' : 'Close'}
             </button>
           </div>
+          
+          <DragOverlay>
+            {activeDragTaskId ? (() => {
+              const task = submissions.find(s => `task-${s.id}` === activeDragTaskId);
+              if (!task) return null;
+              return (
+                <div className="group p-4 rounded-3xl bg-[var(--m3-surface-container-highest)] border border-[var(--m3-primary)]/20 shadow-2xl flex items-center gap-4 rotate-2 scale-105 cursor-grabbing z-[9999] opacity-90 backdrop-blur-sm relative">
+                  <div className="w-10 h-10 rounded-2xl flex items-center justify-center shrink-0 shadow-sm bg-[var(--m3-surface)] text-[var(--m3-primary)]">
+                    <BookOpen className="w-5 h-5" />
+                  </div>
+                  <div className="flex-1 min-w-0 pr-4">
+                    <div className="text-xs font-black uppercase tracking-widest text-[var(--m3-primary)] mb-1 opacity-80">{task.subject}</div>
+                    <div className="text-sm font-bold text-[var(--m3-on-surface)] truncate leading-tight">{task.title}</div>
+                  </div>
+                </div>
+              );
+            })() : null}
+          </DragOverlay>
           </DndContext>
         </motion.div>
       </>
@@ -3072,6 +3180,65 @@ export default function App() {
                     <input type="hidden" name="priority" value={modalPriority} />
                   </div>
                 </div>
+                <div className="space-y-3">
+                  <label className="text-xs font-black text-[var(--m3-on-surface-variant)] uppercase tracking-widest px-1">
+                    {language === 'ja' ? '繰り返し' : 'Repeat'}
+                  </label>
+                  <div className="flex flex-col rounded-2xl bg-[var(--m3-surface-container)] border border-[var(--m3-outline)]/10 overflow-hidden transition-all">
+                    <label className="flex items-center gap-3 cursor-pointer select-none p-4 hover:bg-[var(--m3-surface-container-high)] transition-colors">
+                      <input 
+                        type="checkbox" 
+                        checked={isRepeatEnabled}
+                        onChange={(e) => setIsRepeatEnabled(e.target.checked)}
+                        className="w-5 h-5 rounded-[6px] border-2 border-[var(--m3-outline)]/30 text-[var(--m3-primary)] focus:ring-[var(--m3-primary)]/20 transition-all cursor-pointer" 
+                      />
+                      <span className="text-sm font-bold text-[var(--m3-on-surface)]">
+                        {language === 'ja' ? '繰り返す' : 'Repeat task'}
+                      </span>
+                    </label>
+                    
+                    <AnimatePresence>
+                      {isRepeatEnabled && (
+                        <motion.div 
+                          initial={{ height: 0, opacity: 0 }} 
+                          animate={{ height: 'auto', opacity: 1 }} 
+                          exit={{ height: 0, opacity: 0 }}
+                          transition={{ duration: 0.2 }}
+                          className="overflow-hidden border-t border-[var(--m3-outline-variant)]/20"
+                        >
+                          <div className="p-4 space-y-4 bg-[var(--m3-surface-container-low)]">
+                            <div className="flex items-center justify-between">
+                              <span className="text-xs font-bold text-[var(--m3-on-surface-variant)]">{language === 'ja' ? 'スパン' : 'Interval'}</span>
+                              <select 
+                                value={repeatType} 
+                                onChange={(e) => setRepeatType(e.target.value as any)}
+                                className="bg-[var(--m3-surface)] border border-[var(--m3-outline-variant)]/30 rounded-xl px-3 py-1.5 text-sm font-bold text-[var(--m3-on-surface)] focus:outline-none focus:ring-2 focus:ring-[var(--m3-primary)]/20"
+                              >
+                                <option value="daily">{language === 'ja' ? '毎日' : 'Daily'}</option>
+                                <option value="weekly">{language === 'ja' ? '毎週' : 'Weekly'}</option>
+                                <option value="monthly">{language === 'ja' ? '毎月' : 'Monthly'}</option>
+                              </select>
+                            </div>
+                            <div className="flex items-center justify-between">
+                              <span className="text-xs font-bold text-[var(--m3-on-surface-variant)]">{language === 'ja' ? '回数' : 'Times'}</span>
+                              <div className="flex items-center gap-2">
+                                <input 
+                                  type="number" 
+                                  value={repeatCount}
+                                  onChange={(e) => setRepeatCount(Math.max(2, parseInt(e.target.value) || 2))}
+                                  min={2} 
+                                  max={52} 
+                                  className="w-16 px-2 py-1.5 rounded-xl bg-[var(--m3-surface)] border border-[var(--m3-outline)]/20 text-center font-bold text-[var(--m3-on-surface)] focus:outline-none focus:ring-2 focus:ring-[var(--m3-primary)]/20" 
+                                />
+                                <span className="text-xs font-bold text-[var(--m3-on-surface-variant)]">{language === 'ja' ? '回' : 'times'}</span>
+                              </div>
+                            </div>
+                          </div>
+                        </motion.div>
+                      )}
+                    </AnimatePresence>
+                  </div>
+                </div>
                   <div className="space-y-2">
                     <label className="text-xs font-black text-[var(--m3-on-surface-variant)] uppercase tracking-[0.1em] px-1">{t.details}</label>
                     <textarea name="description" placeholder={t.descriptionPlaceholder} rows={3} className="w-full px-5 py-4 rounded-2xl bg-[var(--m3-surface-container)] border border-[var(--m3-outline)]/10 focus:outline-none focus:ring-4 focus:ring-[var(--m3-primary)]/10 font-medium resize-none text-[var(--m3-on-surface)] transition-all" />
@@ -3697,6 +3864,76 @@ export default function App() {
       </AnimatePresence>
 
       {renderTermsModal()}
+
+      <AnimatePresence>
+        {isMobileMenuOpen && (
+          <>
+            <motion.div 
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              transition={{ duration: 0.2 }}
+              className="fixed inset-0 bg-black/40 backdrop-blur-sm z-[200] lg:hidden"
+              onClick={() => setIsMobileMenuOpen(false)}
+            />
+            <motion.div 
+              initial={{ x: '-100%' }}
+              animate={{ x: 0 }}
+              exit={{ x: '-100%' }}
+              transition={{ type: 'spring', damping: 25, stiffness: 200 }}
+              className="fixed inset-y-0 left-0 w-[85vw] max-w-[320px] bg-[var(--m3-surface)] z-[210] shadow-2xl flex flex-col lg:hidden"
+            >
+              <div className="flex items-center justify-between p-4 border-b border-[var(--m3-outline-variant)]/20">
+                <div className="font-black text-lg tracking-tight text-[var(--m3-primary)] pl-2">{language === 'ja' ? 'メニュー' : 'Menu'}</div>
+                <button 
+                  onClick={() => setIsMobileMenuOpen(false)}
+                  className="p-2 rounded-full hover:bg-[var(--m3-surface-container)] transition-colors active:scale-95"
+                >
+                  <X className="w-5 h-5" />
+                </button>
+              </div>
+              <div className="flex-1 overflow-y-auto overflow-x-hidden p-6 flex flex-col gap-8">
+                <SidebarContent />
+              </div>
+              <div className="p-3 border-t border-[var(--m3-outline-variant)]/20 bg-[var(--m3-surface-container)]">
+                <div className="flex items-center gap-2">
+                  <button 
+                    onClick={() => {
+                      setIsCalendarOpen(true);
+                      setIsMobileMenuOpen(false);
+                    }}
+                    className="flex-1 flex flex-col items-center justify-center gap-1 p-2 rounded-xl hover:bg-[var(--m3-surface-container-high)] text-[var(--m3-on-surface-variant)] transition-all group"
+                  >
+                    <Calendar className="w-5 h-5 text-[var(--m3-primary)]" />
+                    <span className="text-[10px] font-black uppercase tracking-tighter">{language === 'ja' ? 'カレンダー' : 'Calendar'}</span>
+                  </button>
+                  <button 
+                    onClick={() => {
+                      setIsSettingsOpen(true);
+                      setIsMobileMenuOpen(false);
+                    }}
+                    className="flex-1 flex flex-col items-center justify-center gap-1 p-2 rounded-xl hover:bg-[var(--m3-surface-container-high)] text-[var(--m3-on-surface-variant)] transition-all group"
+                  >
+                    <Settings className="w-5 h-5 text-[var(--m3-primary)]" />
+                    <span className="text-[10px] font-black uppercase tracking-tighter">{t.settings}</span>
+                  </button>
+                  <div className="w-px h-8 bg-[var(--m3-outline-variant)]/40 mx-1" />
+                  <button 
+                    onClick={() => {
+                      logout();
+                      setIsMobileMenuOpen(false);
+                    }}
+                    className="flex-1 flex flex-col items-center justify-center gap-1 p-2 rounded-xl hover:bg-[var(--m3-error-container)]/50 text-[var(--m3-on-surface-variant)] hover:text-[var(--m3-error)] transition-all group"
+                  >
+                    <LogOut className="w-5 h-5 text-[var(--m3-error)]" />
+                    <span className="text-[10px] font-black uppercase tracking-tighter">{t.logout}</span>
+                  </button>
+                </div>
+              </div>
+            </motion.div>
+          </>
+        )}
+      </AnimatePresence>
 
       <AnimatePresence>
         {showUpdateNotice && (
