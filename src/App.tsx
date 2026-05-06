@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useMemo, useRef, useCallback } from 'react';
 import { motion, AnimatePresence, LayoutGroup } from 'motion/react';
-import { Plus, Calendar, BookOpen, CheckCircle2, Clock, ChevronRight, ChevronDown, X, Settings, LogOut, LogIn, Trash2, Sun, Moon, Zap, Play, Pause, Square, CheckSquare, Edit3, Coffee, Brain, Eye, EyeOff, AlertCircle, Dog, Cat, Bird, TreePine, PawPrint, Rabbit, Flower, Flower2, MousePointer2, Menu } from 'lucide-react';
+import { Plus, Calendar, BookOpen, CheckCircle2, Clock, ChevronRight, ChevronDown, X, Settings, LogOut, LogIn, Trash2, Sun, Moon, Zap, Play, Pause, Square, CheckSquare, Edit3, Coffee, Brain, Eye, EyeOff, AlertCircle, Dog, Cat, Bird, TreePine, PawPrint, Rabbit, Flower, Flower2, MousePointer2, Menu, RotateCcw, Search, Keyboard } from 'lucide-react';
 import { format, differenceInDays, isPast, isToday, startOfDay, formatDistanceToNow, startOfWeek, endOfWeek, startOfMonth, endOfMonth, addDays, isSameMonth, isSameDay } from 'date-fns';
 import { ja, enUS, vi } from 'date-fns/locale';
 import { DayPicker } from 'react-day-picker';
@@ -27,6 +27,8 @@ import {
   useSortable
 } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
+import { snapCenterToCursor } from '@dnd-kit/modifiers';
+import * as holiday_jp from '@holiday-jp/holiday_jp';
 import { cn } from './lib/utils';
 import { translations, Language } from './translations';
 
@@ -122,6 +124,10 @@ interface Submission {
   uid: string;
   createdAt: any;
   activityLogs?: ActivityLog[];
+  isEvent?: boolean;
+  isAllDay?: boolean;
+  recurringId?: string;
+  hasMoreInSeries?: boolean;
 }
 
 const DEFAULT_SUBJECTS = [
@@ -296,6 +302,8 @@ export default function App() {
   const [editData, setEditData] = useState<Submission | null>(null);
   const [selectedDate, setSelectedDate] = useState<Date | undefined>(new Date());
   const [isCalendarOpen, setIsCalendarOpen] = useState(false);
+  const [isAddingEvent, setIsAddingEvent] = useState(false);
+  const [newEventTitle, setNewEventTitle] = useState("");
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
   const [calendarView, setCalendarView] = useState<'monthly' | 'weekly' | 'yearly'>('monthly');
   const [addTaskType, setAddTaskType] = useState<'pages' | 'percentage'>('percentage');
@@ -314,6 +322,19 @@ export default function App() {
   const [showTermsModal, setShowTermsModal] = useState(false);
   const [hasScrolledToBottom, setHasScrolledToBottom] = useState(false);
   const [tempAccepted, setTempAccepted] = useState(false);
+  const [sortCriteria, setSortCriteria] = useState<'deadline' | 'scheduled' | 'priority' | 'progress'>('scheduled');
+  const [searchQuery, setSearchQuery] = useState("");
+  const [debouncedSearchQuery, setDebouncedSearchQuery] = useState("");
+  const [highlightedTaskId, setHighlightedTaskId] = useState<string | null>(null);
+  const searchInputRef = useRef<HTMLInputElement>(null);
+
+  // Debounce search query
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      setDebouncedSearchQuery(searchQuery);
+    }, 300);
+    return () => clearTimeout(timer);
+  }, [searchQuery]);
 
   // Clear selection on tab change
   useEffect(() => {
@@ -391,6 +412,30 @@ export default function App() {
     setActiveDragTaskId(null);
   };
 
+  const handleAddEvent = async () => {
+    if (!user || !selectedDate || !newEventTitle.trim()) return;
+    try {
+      await addDoc(collection(db, 'submissions'), {
+        uid: user.uid,
+        title: newEventTitle.trim(),
+        subject: modalSubject || '予定',
+        deadline: Timestamp.fromDate(selectedDate),
+        scheduledDate: Timestamp.fromDate(selectedDate),
+        progress: 0,
+        status: 'pending',
+        priority: modalPriority || 'low',
+        createdAt: serverTimestamp(),
+        isEvent: true,
+        taskType: 'percentage'
+      });
+      setNewEventTitle("");
+      setIsAddingEvent(false);
+      showToast(language === 'ja' ? '予定を追加しました' : 'Event added');
+    } catch (error) {
+      handleFirestoreError(error, OperationType.CREATE, 'submissions');
+    }
+  };
+
   const handleCalendarDragEnd = async (event: DragEndEvent) => {
     setActiveDragTaskId(null);
     const { active, over } = event;
@@ -399,22 +444,35 @@ export default function App() {
     const activeId = String(active.id);
     const overId = String(over.id);
     
-    if (activeId.startsWith('task-') && overId.startsWith('date-')) {
+    if (activeId.startsWith('task-')) {
       const taskId = activeId.replace('task-', '');
-      const dateStr = overId.replace('date-', '');
-      const [year, month, day] = dateStr.split('-').map(Number);
-      
       const task = submissions.find(s => s.id === taskId);
-      if (task) {
-        try {
-          const newDate = new Date();
-          newDate.setFullYear(year, month - 1, day);
-          newDate.setHours(0, 0, 0, 0);
-          await updateDoc(doc(db, 'submissions', taskId), {
-            scheduledDate: Timestamp.fromDate(newDate)
-          });
-        } catch(error) {
-          handleFirestoreError(error, OperationType.UPDATE, `submissions/${taskId}`);
+      
+      if (overId === 'unscheduled') {
+        if (task) {
+          try {
+            await updateDoc(doc(db, 'submissions', taskId), {
+              scheduledDate: null
+            });
+          } catch(error) {
+            handleFirestoreError(error, OperationType.UPDATE, `submissions/${taskId}`);
+          }
+        }
+      } else if (overId.startsWith('date-')) {
+        const dateStr = overId.replace('date-', '');
+        const [year, month, day] = dateStr.split('-').map(Number);
+        
+        if (task) {
+          try {
+            const newDate = new Date();
+            newDate.setFullYear(year, month - 1, day);
+            newDate.setHours(0, 0, 0, 0);
+            await updateDoc(doc(db, 'submissions', taskId), {
+              scheduledDate: Timestamp.fromDate(newDate)
+            });
+          } catch(error) {
+            handleFirestoreError(error, OperationType.UPDATE, `submissions/${taskId}`);
+          }
         }
       }
     }
@@ -447,8 +505,11 @@ export default function App() {
   const tasksByDate = useMemo(() => {
     const map: Record<string, Submission[]> = {};
     submissions.forEach(sub => {
-      if (sub.isDeleted || !sub.scheduledDate) return;
-      const dateKey = format(sub.scheduledDate, 'yyyy-MM-dd');
+      if (sub.isDeleted) return;
+      const dateToUse = sub.scheduledDate || sub.deadline;
+      if (!dateToUse) return;
+      
+      const dateKey = format(dateToUse instanceof Date ? dateToUse : dateToUse.toDate(), 'yyyy-MM-dd');
       if (!map[dateKey]) map[dateKey] = [];
       map[dateKey].push(sub);
     });
@@ -458,8 +519,10 @@ export default function App() {
   const selectedDateSubmissions = useMemo(() => {
     if (!selectedDate) return [];
     return submissions.filter(sub => {
-      if (sub.isDeleted || !sub.scheduledDate) return false;
-      return isSameDay(sub.scheduledDate, selectedDate);
+      if (sub.isDeleted) return false;
+      const dateToUse = sub.scheduledDate || sub.deadline;
+      if (!dateToUse) return false;
+      return isSameDay(dateToUse instanceof Date ? dateToUse : dateToUse.toDate(), selectedDate);
     });
   }, [submissions, selectedDate]);
 
@@ -627,24 +690,26 @@ export default function App() {
   useEffect(() => {
     const checkDeadlines = () => {
       const now = new Date();
-      submissions.forEach(s => {
-        if (s.status === 'completed') return;
+      const oneHour = 1000 * 60 * 60;
+      
+      for (let i = 0; i < submissions.length; i++) {
+        const s = submissions[i];
+        if (s.status === 'completed' || s.isDeleted) continue;
         
         const diff = s.deadline.getTime() - now.getTime();
-        const oneHour = 1000 * 60 * 60;
         
-        // Notify if deadline is within 1 hour and not already notified (simple session-based check)
+        // Notify if deadline is within 1 hour and not already notified
         if (diff > 0 && diff < oneHour) {
           const storageKey = `notified_${s.id}`;
           if (!sessionStorage.getItem(storageKey)) {
-            new Notification("締切間近の課題があります", {
-              body: `${s.subject}: ${s.title} の締切まであと1時間以内です！`,
+            new Notification(language === 'ja' ? '締切間近の課題があります' : 'Upcoming deadline', {
+              body: `${s.subject}: ${s.title} ${language === 'ja' ? 'の締切まであと1時間以内です！' : 'is due in less than an hour!'}`,
               icon: "/Gemini_Generated_Image_pm2flopm2flopm2f.png"
             });
             sessionStorage.setItem(storageKey, "true");
           }
         }
-      });
+      }
     };
 
     const interval = setInterval(checkDeadlines, 1000 * 60 * 5); // Check every 5 minutes
@@ -921,9 +986,17 @@ export default function App() {
     const [y, m, d] = dateValue.split('-').map(Number);
     const combinedDate = new Date(y, m - 1, d, hours, minutes, 0, 0);
 
+    let scheduledDateObj: Date | null = null;
+    const scheduledDateVal = formData.get('scheduledDate') as string;
+    if (scheduledDateVal) {
+      const [sy, sm, sd] = scheduledDateVal.split('-').map(Number);
+      scheduledDateObj = new Date(sy, sm - 1, sd, 0, 0, 0, 0);
+    }
+
     try {
       const promises = [];
       const repeatTimes = isRepeatEnabled ? repeatCount : 1;
+      const recurringId = isRepeatEnabled ? Math.random().toString(36).substring(2, 15) : undefined;
       
       for (let i = 0; i < repeatTimes; i++) {
         const dClone = new Date(combinedDate);
@@ -932,11 +1005,23 @@ export default function App() {
           if (repeatType === 'weekly') dClone.setDate(dClone.getDate() + (i * 7));
           if (repeatType === 'monthly') dClone.setMonth(dClone.getMonth() + i);
         }
+        
+        let sClone: Date | null = null;
+        if (scheduledDateObj) {
+          sClone = new Date(scheduledDateObj);
+          if (isRepeatEnabled) {
+            if (repeatType === 'daily') sClone.setDate(sClone.getDate() + i);
+            if (repeatType === 'weekly') sClone.setDate(sClone.getDate() + (i * 7));
+            if (repeatType === 'monthly') sClone.setMonth(sClone.getMonth() + i);
+          }
+        }
+        
         promises.push(addDoc(collection(db, 'submissions'), {
           uid: user.uid,
           title,
           subject,
           deadline: Timestamp.fromDate(dClone),
+          scheduledDate: sClone ? Timestamp.fromDate(sClone) : null,
           description: description || '',
           priority: priority || 'medium',
           progress: 0,
@@ -946,7 +1031,8 @@ export default function App() {
           startPage: taskType === 'pages' ? startPage : null,
           endPage: taskType === 'pages' ? endPage : null,
           currentPage: taskType === 'pages' ? startPage : 0,
-          activityLogs: []
+          activityLogs: [],
+          recurringId: recurringId || null
         }));
       }
       await Promise.all(promises);
@@ -990,6 +1076,14 @@ export default function App() {
       title, subject, description, priority, progress,
       deadline: Timestamp.fromDate(combinedDate)
     };
+
+    const scheduledDateVal = formData.get('scheduledDate') as string;
+    if (scheduledDateVal) {
+      const [sy, sm, sd] = scheduledDateVal.split('-').map(Number);
+      updatePayload.scheduledDate = Timestamp.fromDate(new Date(sy, sm - 1, sd, 0, 0, 0, 0));
+    } else {
+      updatePayload.scheduledDate = null;
+    }
 
     if (editData.taskType === 'pages') {
       updatePayload.startPage = startPage;
@@ -1103,21 +1197,17 @@ export default function App() {
     }
   };
 
-  // Calculate overall urgency for background color
-  const urgencyLevel = useMemo(() => {
-    const activeSubmissions = submissions.filter(s => s.status !== 'completed');
-    if (activeSubmissions.length === 0) return 'safe';
-    
-    const daysToNearest = Math.min(...activeSubmissions.map(s => differenceInDays(s.deadline, new Date())));
-    
-    if (daysToNearest <= 0) return 'danger';
-    if (daysToNearest <= 3) return 'warning';
-    return 'safe';
-  }, [submissions]);
-
   const groupedSubmissions = useMemo(() => {
     const groups: { [key: string]: Submission[] } = {};
     const filtered = submissions.filter(s => {
+      // Search filter
+      const searchLower = debouncedSearchQuery.toLowerCase();
+      const matchesSearch = s.title.toLowerCase().includes(searchLower) || 
+                          s.subject.toLowerCase().includes(searchLower) ||
+                          (s.description || "").toLowerCase().includes(searchLower);
+      
+      if (!matchesSearch) return false;
+
       // Archive tab: show both completed and soft-deleted tasks
       if (activeTab === 'history') {
         const isMatch = s.status === 'completed' || s.isDeleted;
@@ -1131,12 +1221,200 @@ export default function App() {
       return subjectFilter ? s.subject === subjectFilter : true;
     });
     
-    filtered.forEach(s => {
+    // Sort the filtered list before grouping
+    let sorted = [...filtered].sort((a, b) => {
+      if (activeTab === 'history') {
+        const timeA = a.completedAt?.toMillis() || a.deletedAt?.toMillis() || 0;
+        const timeB = b.completedAt?.toMillis() || b.deletedAt?.toMillis() || 0;
+        return timeB - timeA;
+      }
+
+      switch (sortCriteria) {
+        case 'scheduled': {
+          const dateA = a.scheduledDate || a.deadline;
+          const dateB = b.scheduledDate || b.deadline;
+          const timeA = dateA instanceof Date ? dateA.getTime() : dateA?.getTime() || 0;
+          const timeB = dateB instanceof Date ? dateB.getTime() : dateB?.getTime() || 0;
+          if (timeA !== timeB) return timeA - timeB;
+          return a.deadline.getTime() - b.deadline.getTime();
+        }
+        case 'deadline':
+          return a.deadline.getTime() - b.deadline.getTime();
+        case 'priority': {
+          const pMap = { high: 0, medium: 1, low: 2 };
+          if (pMap[a.priority] !== pMap[b.priority]) return pMap[a.priority] - pMap[b.priority];
+          return a.deadline.getTime() - b.deadline.getTime();
+        }
+        case 'progress':
+          if (b.progress !== a.progress) return b.progress - a.progress;
+          return a.deadline.getTime() - b.deadline.getTime();
+        default:
+          return a.deadline.getTime() - b.deadline.getTime();
+      }
+    });
+
+    // Special handling for recurring tasks: only show the first pending one in the list
+    if (activeTab === 'active') {
+      const seenRecurringIds = new Set<string>();
+      const finalSelection: Submission[] = [];
+      
+      sorted.forEach(s => {
+        if (s.recurringId) {
+          if (!seenRecurringIds.has(s.recurringId)) {
+            seenRecurringIds.add(s.recurringId);
+            // Check if there are more pending tasks in this series
+            const moreCount = filtered.filter(f => f.recurringId === s.recurringId && f.status === 'pending' && f.id !== s.id).length;
+            finalSelection.push({ ...s, hasMoreInSeries: moreCount > 0 });
+          }
+        } else {
+          finalSelection.push(s);
+        }
+      });
+      sorted = finalSelection;
+    }
+
+    sorted.forEach(s => {
       if (!groups[s.subject]) groups[s.subject] = [];
       groups[s.subject].push(s);
     });
     return groups;
-  }, [submissions, activeTab, subjectFilter]);
+  }, [submissions, activeTab, subjectFilter, sortCriteria, debouncedSearchQuery]);
+
+  // Calculate overall urgency for background color
+  const urgencyLevel = useMemo(() => {
+    let minDays = Infinity;
+    let found = false;
+    const now = new Date();
+    
+    for (let i = 0; i < submissions.length; i++) {
+      const s = submissions[i];
+      if (s.status !== 'completed' && !s.isDeleted) {
+        const d = differenceInDays(s.deadline, now);
+        if (d < minDays) minDays = d;
+        found = true;
+      }
+    }
+    
+    if (!found) return 'safe';
+    if (minDays <= 0) return 'danger';
+    if (minDays <= 3) return 'warning';
+    return 'safe';
+  }, [submissions]);
+
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      // Don't trigger if user is typing in an input (except for specific cases)
+      const isTyping = e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement || e.target instanceof HTMLSelectElement;
+
+      // Escape always works
+      if (e.key === 'Escape') {
+        setIsAdding(false);
+        setIsEditing(false);
+        setSelectedId(null);
+        setHighlightedTaskId(null);
+        setIsCalendarOpen(false);
+        setIsMobileMenuOpen(false);
+        setIsSettingsOpen(false);
+        setIsSubjectDropdownOpen(false);
+        if (isTyping) (e.target as HTMLElement).blur();
+        return;
+      }
+
+      if (isTyping) {
+        return;
+      }
+      
+      // Global Shortcuts
+      // Cmd+K or Ctrl+K or 'a' to add new task
+      if (((e.metaKey || e.ctrlKey) && e.key === 'k') || e.key === 'a') {
+        e.preventDefault();
+        setIsAdding(true);
+        return;
+      }
+
+      // Search with '/'
+      if (e.key === '/') {
+        e.preventDefault();
+        searchInputRef.current?.focus();
+        return;
+      }
+
+      // Calendar with 'c'
+      if (e.key === 'c') {
+        e.preventDefault();
+        setIsCalendarOpen(true);
+        return;
+      }
+
+      // History toggle with 'h'
+      if (e.key === 'h') {
+        e.preventDefault();
+        setActiveTab(prev => prev === 'active' ? 'history' : 'active');
+        return;
+      }
+
+      // Cycle sort with 's'
+      if (e.key === 's') {
+        e.preventDefault();
+        const modes: ('deadline' | 'scheduled' | 'priority' | 'progress')[] = ['deadline', 'scheduled', 'priority', 'progress'];
+        setSortCriteria(prev => modes[(modes.indexOf(prev) + 1) % modes.length]);
+        return;
+      }
+      
+      // If modal is open
+      if (selectedId && !isAdding && !isEditing && !isCalendarOpen && !isSettingsOpen) {
+        const selectedSubmission = submissions.find(s => s.id === selectedId);
+        if (!selectedSubmission) return;
+        
+        if ((e.key === 'e' || e.key === 'E') && selectedSubmission.status !== 'completed' && !selectedSubmission.isDeleted && activeTab !== 'history') {
+          e.preventDefault();
+          setEditData(selectedSubmission);
+          setIsEditing(true);
+          setSelectedId(null);
+        }
+        else if (e.key === 'x' || e.key === 'X' || e.key === 'Backspace' || e.key === 'Delete') {
+          e.preventDefault();
+          deleteSubmission(selectedId, e as any);
+        }
+        else if (e.key === 'Enter') {
+          e.preventDefault();
+          toggleComplete(selectedId, e as any);
+          setSelectedId(null);
+        }
+        return;
+      }
+
+      // Task Navigation (j/k or Arrows)
+      if (e.key === 'j' || e.key === 'ArrowDown' || e.key === 'k' || e.key === 'ArrowUp') {
+        e.preventDefault();
+        const allTasks = Object.values(groupedSubmissions).flat();
+        if (allTasks.length === 0) return;
+
+        let nextId = allTasks[0].id;
+        if (highlightedTaskId) {
+          const currentIndex = allTasks.findIndex(t => t.id === highlightedTaskId);
+          if (e.key === 'j' || e.key === 'ArrowDown') {
+            nextId = allTasks[(currentIndex + 1) % allTasks.length].id;
+          } else {
+            nextId = allTasks[(currentIndex - 1 + allTasks.length) % allTasks.length].id;
+          }
+        }
+        setHighlightedTaskId(nextId);
+        // Scroll to highlighted element
+        const element = document.getElementById(`task-card-${nextId}`);
+        element?.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+      }
+
+      if (highlightedTaskId && e.key === 'Enter') {
+        e.preventDefault();
+        setSelectedId(highlightedTaskId);
+        setHighlightedTaskId(null);
+      }
+    };
+    
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [selectedId, submissions, isAdding, isEditing, isCalendarOpen, isSettingsOpen, activeTab, highlightedTaskId, groupedSubmissions]);
 
   const selectedSubmission = submissions.find(s => s.id === selectedId);
 
@@ -1669,6 +1947,23 @@ export default function App() {
               >
                 <Settings className="w-6 h-6" />
               </button>
+              <div className="mx-1 h-6 w-px bg-[var(--m3-outline-variant)]/40" />
+              <button 
+                onClick={() => {
+                  setConfirmDialog({
+                    title: t.keyboardShortcuts,
+                    message: language === 'ja' 
+                      ? '• a / ctrl+k : 新規タスク\n• / : 検索\n• s : 並び替え順を切り替え\n• c : カレンダーを開く\n• h : アーカイブ切り替え\n• j / k / 矢印 : タスクを選択\n• Enter : 詳細を開く / 完了'
+                      : '• a / ctrl+k : New Task\n• / : Search\n• s : Cycle Sorting\n• c : Open Calendar\n• h : Toggle Archive\n• j / k / Arrows : Select Task\n• Enter : Details / Complete',
+                    onConfirm: () => setConfirmDialog(null),
+                    confirmLabel: 'OK'
+                  });
+                }}
+                className="p-3 rounded-full hover:bg-[var(--m3-surface-container)] text-[var(--m3-on-surface-variant)] transition-all active:scale-95"
+                title={t.keyboardShortcuts}
+              >
+                <Keyboard className="w-6 h-6" />
+              </button>
               <button 
                 onClick={logout}
                 className="p-3 rounded-full hover:bg-[var(--m3-error-container)]/50 text-[var(--m3-on-surface-variant)] hover:text-[var(--m3-error)] transition-all active:scale-95"
@@ -1697,8 +1992,53 @@ export default function App() {
 
           {/* Main Content */}
       <main className="flex-1 overflow-y-auto pb-24 lg:pb-20 px-4 lg:px-0 lg:pr-2">
-        {/* Subject Filter Bar */}
-        <div className="mb-4 py-1 flex items-center w-full max-w-full">
+        {/* Search and Sort Logic */}
+        <div className="mb-6 space-y-4">
+          <div className="flex flex-col md:flex-row gap-4">
+            {/* Search Input */}
+            <div className="relative flex-1 group">
+              <div className="absolute left-4 top-1/2 -translate-y-1/2 text-[var(--m3-on-surface-variant)]/40 group-focus-within:text-[var(--m3-primary)] transition-colors">
+                <Search className="w-5 h-5" />
+              </div>
+              <input
+                ref={searchInputRef}
+                type="text"
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                placeholder={t.searchPlaceholder}
+                className="w-full pl-12 pr-4 py-3.5 rounded-2xl bg-[var(--m3-surface-container-high)] border border-[var(--m3-outline-variant)]/20 focus:outline-none focus:ring-4 focus:ring-[var(--m3-primary)]/10 font-bold text-[var(--m3-on-surface)] transition-all"
+              />
+              <div className="absolute right-4 top-1/2 -translate-y-1/2 hidden md:flex items-center gap-1 px-1.5 py-0.5 rounded-md bg-[var(--m3-surface-variant)]/50 border border-[var(--m3-outline-variant)]/40 text-[10px] font-black text-[var(--m3-on-surface-variant)]/60">
+                <span>/</span>
+              </div>
+            </div>
+
+            {/* Sort Toggle */}
+            <div className="flex p-1 bg-[var(--m3-surface-container-high)] rounded-2xl border border-[var(--m3-outline-variant)]/20 shrink-0 overflow-x-auto no-scrollbar">
+              {([
+                { id: 'deadline', label: t.sort_deadline },
+                { id: 'scheduled', label: t.sort_scheduled },
+                { id: 'priority', label: t.sort_priority },
+                { id: 'progress', label: t.sort_progress }
+              ] as const).map((criteria) => (
+                <button
+                  key={criteria.id}
+                  onClick={() => setSortCriteria(criteria.id)}
+                  className={cn(
+                    "px-4 py-2.5 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all whitespace-nowrap",
+                    sortCriteria === criteria.id 
+                      ? "bg-[var(--m3-primary)] text-[var(--m3-on-primary)] shadow-md" 
+                      : "text-[var(--m3-on-surface-variant)] hover:bg-[var(--m3-surface-container-highest)]"
+                  )}
+                >
+                  {criteria.label}
+                </button>
+              ))}
+            </div>
+          </div>
+
+          {/* Subject Filter Bar */}
+          <div className="py-1 flex items-center w-full max-w-full">
           <div className="flex overflow-x-auto gap-2 px-2 no-scrollbar snap-x w-full">
             <button
               onClick={() => setSubjectFilter(null)}
@@ -1738,7 +2078,7 @@ export default function App() {
               <button
                 onClick={() => setIsSelectionMode(!isSelectionMode)}
                 className={cn(
-                  "flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-black uppercase tracking-widest transition-all active:scale-95",
+                  "flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-black uppercase tracking-wider transition-all active:scale-95 whitespace-nowrap",
                   isSelectionMode 
                     ? "bg-[var(--m3-primary)]/10 text-[var(--m3-primary)] border border-[var(--m3-primary)]/20" 
                     : "bg-[var(--m3-surface-container-high)] text-[var(--m3-on-surface-variant)] border border-[var(--m3-outline)]/10"
@@ -1750,6 +2090,7 @@ export default function App() {
             </div>
           )}
         </div>
+      </div>
 
         {/* Bulk Action Bar (Archive Tab) */}
         <AnimatePresence>
@@ -1856,24 +2197,18 @@ export default function App() {
                     )}
                   >
                     <AnimatePresence mode="popLayout" initial={false}>
-                      {(items as Submission[])
-                        .sort((a, b) => {
-                          if (activeTab === 'history') {
-                            const timeA = a.completedAt?.toMillis() || a.deletedAt?.toMillis() || 0;
-                            const timeB = b.completedAt?.toMillis() || b.deletedAt?.toMillis() || 0;
-                            return timeB - timeA;
-                          }
-                          return a.deadline.getTime() - b.deadline.getTime();
-                        })
+                      {(items as any[])
                         .map((submission) => (
                           <MemoizedSubmissionCard 
                                 key={submission.id} 
                                 submission={submission} 
+                                hasMoreInSeries={submission.hasMoreInSeries}
                                 isHistoryView={activeTab === 'history'}
                                 language={language}
                                 theme={theme}
                                 isSelectionMode={isSelectionMode}
                                 isSelected={selectedArchiveIds.has(submission.id)}
+                                isHighlighted={highlightedTaskId === submission.id}
                                 onToggleSelect={(e) => {
                                   e.stopPropagation();
                                   const newSet = new Set(selectedArchiveIds);
@@ -1975,43 +2310,55 @@ export default function App() {
           className="fixed inset-0 bg-black/40 backdrop-blur-sm z-[150]"
         />
         <motion.div
-          initial={{ x: '100%' }}
-          animate={{ x: 0 }}
-          exit={{ x: '100%' }}
+          initial={{ opacity: 0, scale: 0.95 }}
+          animate={{ opacity: 1, scale: 1 }}
+          exit={{ opacity: 0, scale: 0.95 }}
           transition={{ type: 'spring', damping: 25, stiffness: 200 }}
-          className="fixed top-0 right-0 h-full w-full lg:max-w-[800px] sm:rounded-l-[32px] bg-[var(--m3-surface-container-high)] shadow-2xl z-[160] flex flex-col overflow-hidden"
+          className="fixed inset-0 w-full h-full bg-[var(--m3-surface)] z-[160] flex flex-col overflow-hidden"
         >
           <DndContext sensors={sensors} collisionDetection={closestCenter} onDragStart={handleDragStart} onDragEnd={handleCalendarDragEnd} onDragCancel={handleDragCancel}>
-            <div className="p-4 sm:p-6 flex items-center justify-between border-b border-[var(--m3-outline-variant)]/40 shrink-0 bg-[var(--m3-surface-container-high)] z-10">
-            <div className="flex items-center gap-3">
-              <div className="w-10 h-10 rounded-2xl bg-[var(--m3-primary-container)] flex items-center justify-center text-[var(--m3-on-primary-container)]">
-                <Calendar className="w-6 h-6" />
+            <div className="p-4 sm:px-8 py-4 flex items-center justify-between border-b border-[var(--m3-outline-variant)]/40 shrink-0 bg-[var(--m3-surface)] z-10">
+            <div className="flex items-center gap-4">
+              <div className="w-10 h-10 sm:w-12 sm:h-12 rounded-[20px] bg-[var(--m3-primary-container)] flex items-center justify-center text-[var(--m3-on-primary-container)] shadow-sm">
+                <Calendar className="w-6 h-6 sm:w-7 sm:h-7" />
               </div>
               <div>
-                <h2 className="text-lg sm:text-xl font-black text-[var(--m3-on-surface)]">
-                  {language === 'ja' ? 'カレンダー' : 'Calendar'}
+                <h2 className="text-xl sm:text-2xl font-black text-[var(--m3-on-surface)] tracking-tight">
+                  {language === 'ja' ? 'カレンダー・スケジュール' : 'Calendar & Schedule'}
                 </h2>
+                <div className="text-[10px] sm:text-xs font-bold text-[var(--m3-on-surface-variant)] opacity-70">
+                  {format(new Date(), 'yyyy / MM / dd')}
+                </div>
               </div>
             </div>
-            <button 
-              onClick={() => setIsCalendarOpen(false)}
-              className="p-2 sm:p-3 rounded-full hover:bg-[var(--m3-surface-container-highest)] text-[var(--m3-on-surface-variant)] transition-all"
-            >
-              <X className="w-6 h-6" />
-            </button>
+            <div className="flex items-center gap-3">
+              <button
+                onClick={() => setSelectedDate(new Date())}
+                className="hidden sm:flex px-4 py-2 bg-[var(--m3-secondary-container)] hover:bg-[var(--m3-secondary-container)]/80 text-[var(--m3-on-secondary-container)] rounded-2xl text-xs font-black uppercase tracking-widest transition-all active:scale-95 shadow-sm"
+              >
+                {language === 'ja' ? '今日' : 'Today'}
+              </button>
+              <button 
+                onClick={() => setIsCalendarOpen(false)}
+                className="p-2 sm:p-3 rounded-2xl hover:bg-[var(--m3-surface-container-highest)] text-[var(--m3-on-surface-variant)] transition-all bg-[var(--m3-surface-container-high)]"
+              >
+                <X className="w-6 h-6" />
+              </button>
+            </div>
           </div>
           
-          <div className="flex-1 overflow-y-auto px-4 sm:px-6 py-4 space-y-6 sm:space-y-8">
-            {/* View Switcher/Navigation Header */}
-            <div className="flex flex-col gap-4">
-              <div className="flex items-center gap-2">
-                <div className="flex-1 flex p-1 bg-[var(--m3-surface-container)] rounded-2xl border border-[var(--m3-outline-variant)]/20">
+          <div className="flex-1 overflow-hidden flex flex-col lg:flex-row h-full">
+            {/* Left Column: Calendar Grid */}
+            <div className="flex-1 overflow-y-auto p-4 sm:p-6 lg:p-8 space-y-6 lg:border-r border-[var(--m3-outline-variant)]/30 custom-scrollbar">
+              {/* View Switcher/Navigation Header */}
+              <div className="flex flex-col sm:flex-row items-center gap-4 bg-[var(--m3-surface-container-low)] p-3 rounded-3xl border border-[var(--m3-outline-variant)]/20 shadow-sm">
+                <div className="flex p-1 bg-[var(--m3-surface-container-high)] rounded-[18px] border border-[var(--m3-outline-variant)]/20 shadow-inner w-full sm:w-auto">
                   {(['weekly', 'monthly', 'yearly'] as const).map((view) => (
                     <button
                       key={view}
                       onClick={() => setCalendarView(view)}
                       className={cn(
-                        "flex-1 py-1.5 sm:py-2 text-[10px] font-black uppercase tracking-widest rounded-xl transition-all",
+                        "px-4 sm:px-6 py-2 text-[10px] font-black uppercase tracking-widest rounded-xl transition-all",
                         calendarView === view 
                           ? "bg-[var(--m3-primary)] text-[var(--m3-on-primary)] shadow-md" 
                           : "text-[var(--m3-on-surface-variant)] hover:bg-[var(--m3-surface-container-highest)]"
@@ -2024,44 +2371,43 @@ export default function App() {
                     </button>
                   ))}
                 </div>
-                <button
-                  onClick={() => setSelectedDate(new Date())}
-                  className="px-3 sm:px-4 py-2 bg-[var(--m3-surface-container)] hover:bg-[var(--m3-surface-container-highest)] text-[var(--m3-primary)] border border-[var(--m3-outline-variant)]/20 rounded-2xl text-[10px] font-black uppercase tracking-widest transition-all active:scale-95 shrink-0"
-                >
-                  {language === 'ja' ? '今日' : 'Today'}
-                </button>
-              </div>
-
-              {calendarView === 'monthly' && (
-                <div className="flex items-center justify-between px-2 bg-[var(--m3-surface-container)] rounded-2xl p-2 border border-[var(--m3-outline-variant)]/10">
-                  <div className="text-sm font-black text-[var(--m3-on-surface)]">
-                    {selectedDate ? format(selectedDate, language === 'ja' ? 'yyyy年 M月' : 'MMMM yyyy', { locale: language === 'ja' ? ja : language === 'vi' ? vi : enUS }) : '---'}
+                
+                <div className="flex items-center justify-between flex-1 px-4 py-1.5 bg-[var(--m3-surface-container-highest)]/40 rounded-2xl border border-[var(--m3-outline-variant)]/10 w-full sm:w-auto">
+                  <div className="text-sm font-black text-[var(--m3-primary)]">
+                    {selectedDate ? format(selectedDate, 
+                      calendarView === 'yearly' ? 'yyyy年' : 
+                      language === 'ja' ? 'yyyy年 M月' : 'MMMM yyyy', 
+                      { locale: language === 'ja' ? ja : language === 'vi' ? vi : enUS }
+                    ) : '---'}
                   </div>
                   <div className="flex items-center gap-1">
                     <button 
                       onClick={() => {
                         const d = new Date(selectedDate || new Date());
-                        d.setMonth(d.getMonth() - 1);
+                        if (calendarView === 'monthly') d.setMonth(d.getMonth() - 1);
+                        else if (calendarView === 'weekly') d.setDate(d.getDate() - 7);
+                        else d.setFullYear(d.getFullYear() - 1);
                         setSelectedDate(d);
                       }}
-                      className="p-1.5 rounded-lg hover:bg-[var(--m3-surface-container-highest)] text-[var(--m3-on-surface-variant)] transition-all"
+                      className="p-1.5 rounded-xl hover:bg-[var(--m3-primary)]/10 text-[var(--m3-primary)] transition-all"
                     >
                       <ChevronRight className="w-4 h-4 rotate-180" />
                     </button>
                     <button 
                       onClick={() => {
                         const d = new Date(selectedDate || new Date());
-                        d.setMonth(d.getMonth() + 1);
+                        if (calendarView === 'monthly') d.setMonth(d.getMonth() + 1);
+                        else if (calendarView === 'weekly') d.setDate(d.getDate() + 7);
+                        else d.setFullYear(d.getFullYear() + 1);
                         setSelectedDate(d);
                       }}
-                      className="p-1.5 rounded-lg hover:bg-[var(--m3-surface-container-highest)] text-[var(--m3-on-surface-variant)] transition-all"
+                      className="p-1.5 rounded-xl hover:bg-[var(--m3-primary)]/10 text-[var(--m3-primary)] transition-all"
                     >
                       <ChevronRight className="w-4 h-4" />
                     </button>
                   </div>
                 </div>
-              )}
-            </div>
+              </div>
 
             {/* Calendar Component */}
             <div className={cn(
@@ -2287,7 +2633,7 @@ export default function App() {
                                     "p-2 sm:p-2.5 rounded-xl border-l-4 shadow-sm w-full text-left transition-all",
                                     task.status === 'completed' 
                                       ? "bg-[var(--m3-surface)] border-l-[var(--m3-outline)] opacity-60" 
-                                      : "bg-[var(--m3-surface-container-lowest)] border-l-[var(--m3-primary)] hover:shadow-md cursor-grab active:cursor-grabbing"
+                                      : task.isEvent ? "bg-[var(--m3-secondary-container)] border-l-[var(--m3-secondary)] cursor-grab active:cursor-grabbing hover:shadow-md" : "bg-[var(--m3-surface-container-lowest)] border-l-[var(--m3-primary)] hover:shadow-md cursor-grab active:cursor-grabbing"
                                   )}
                                 >
                                   <div className={cn(
@@ -2314,8 +2660,8 @@ export default function App() {
               ) : (
                 <div className="monthly-grid">
                   <div className="monthly-header">
-                    {(language === 'ja' ? ['日', '月', '火', '水', '木', '金', '土'] : ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat']).map(day => (
-                      <div key={day} className="monthly-header-cell">{day}</div>
+                    {(language === 'ja' ? ['日', '月', '火', '水', '木', '金', '土'] : ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat']).map((day, i) => (
+                      <div key={day} className={cn("monthly-header-cell", i === 0 && "text-red-500", i === 6 && "text-blue-500")}>{day}</div>
                     ))}
                   </div>
                   {(() => {
@@ -2335,6 +2681,11 @@ export default function App() {
                         const isSelected = selectedDate && isSameDay(dateClone, selectedDate);
                         const isCurrentMonth = isSameMonth(dateClone, selectedDate || new Date());
                         const dayTasks = tasksByDate[dateStr] || [];
+                        const holidays = holiday_jp.between(dateClone, dateClone);
+                        const holiday = holidays.length > 0 ? holidays[0] : null;
+                        const dayOfWeek = dateClone.getDay();
+                        const isRedDay = dayOfWeek === 0 || !!holiday;
+                        const isBlueDay = dayOfWeek === 6 && !holiday;
 
                         cells.push(
                           <DroppableDateCell 
@@ -2348,14 +2699,21 @@ export default function App() {
                               isToday(dateClone) && "bg-[var(--m3-primary)]/5"
                             )}
                           >
-                            <div className="flex justify-between items-start mb-1">
+                            <div className="flex justify-between items-start mb-1 h-6">
                               <span className={cn(
-                                "text-xs sm:text-sm font-bold w-6 h-6 sm:w-7 sm:h-7 flex items-center justify-center rounded-full mt-0.5 ml-0.5",
-                                isToday(dateClone) ? "bg-[var(--m3-primary)] text-[var(--m3-on-primary)]" : "text-[var(--m3-on-surface)]",
-                                isSelected && !isToday(dateClone) ? "bg-[var(--m3-primary-container)] text-[var(--m3-on-primary-container)]" : ""
+                                "text-xs sm:text-sm font-bold w-6 h-6 sm:w-7 sm:h-7 flex items-center justify-center rounded-full mt-0.5 ml-0.5 shrink-0",
+                                isToday(dateClone) ? "bg-[var(--m3-primary)] text-[var(--m3-on-primary)]" : 
+                                isSelected ? "bg-[var(--m3-primary-container)] text-[var(--m3-on-primary-container)]" :
+                                isRedDay ? "text-red-500" :
+                                isBlueDay ? "text-blue-500" : "text-[var(--m3-on-surface)]"
                               )}>{dateClone.getDate()}</span>
+                              {holiday && (
+                                <span className="text-[8px] sm:text-[9px] font-bold text-red-500 opacity-80 leading-tight mt-1 text-right truncate">
+                                  {holiday.name}
+                                </span>
+                              )}
                             </div>
-                            <div className="flex-1 space-y-0.5 min-w-0">
+                            <div className="flex-1 space-y-0.5 min-w-0 mt-1">
                               {dayTasks.slice(0, 4).map(task => (
                                 <DraggableTaskRender 
                                   key={task.id} 
@@ -2364,7 +2722,7 @@ export default function App() {
                                     "text-[9px] sm:text-[10px] px-1 sm:px-1.5 py-0.5 rounded border border-transparent truncate cursor-grab active:cursor-grabbing font-bold transition-all",
                                     task.status === 'completed'
                                       ? "bg-[var(--m3-surface-variant)]/50 text-[var(--m3-on-surface-variant)] opacity-50 line-through"
-                                      : "bg-[var(--m3-primary)]/10 text-[var(--m3-primary)] hover:bg-[var(--m3-primary)]/20"
+                                      : task.isEvent ? "bg-[var(--m3-secondary)]/10 text-[var(--m3-secondary)] hover:bg-[var(--m3-secondary)]/20" : "bg-[var(--m3-primary)]/10 text-[var(--m3-primary)] hover:bg-[var(--m3-primary)]/20"
                                   )}
                                 >
                                   {task.title}
@@ -2387,160 +2745,275 @@ export default function App() {
                 </div>
               )}
             </div>
+          </div>
             
 
 
-            {/* Task List for Selected Date */}
-            <div className="space-y-4 pb-8">
-              <div className="flex items-center justify-between px-2">
-                <h3 className="text-sm font-black text-[var(--m3-on-surface-variant)] uppercase tracking-wider">
-                  {selectedDate ? format(selectedDate, language === 'ja' ? 'M月d日のタスク' : "'Tasks for' MMM d", { locale: language === 'ja' ? ja : language === 'vi' ? vi : enUS }) : '---'}
-                </h3>
-                <span className="text-[10px] font-black px-2 py-0.5 rounded-full bg-[var(--m3-primary)]/10 text-[var(--m3-primary)]">
-                  {selectedDateSubmissions.length}
-                </span>
-              </div>
-              
-              {selectedDateSubmissions.length > 0 ? (
-                <div className="space-y-3">
-                  {selectedDateSubmissions.map((sub, idx) => (
-                    <motion.div
-                      key={sub.id}
-                      initial={{ opacity: 0, y: 10 }}
-                      animate={{ opacity: 1, y: 0 }}
-                      transition={{ delay: idx * 0.05 }}
-                      onClick={() => {
-                        setSelectedId(sub.id);
-                        
-                      }}
-                    >
-                      <DraggableTaskRender
-                        id={`task-${sub.id}`}
-                        className="group p-4 rounded-3xl bg-[var(--m3-surface-container)] border border-[var(--m3-outline)]/5 hover:border-[var(--m3-primary)]/20 hover:bg-[var(--m3-surface-container-highest)] transition-all cursor-grab active:cursor-grabbing flex items-center gap-4"
+            {/* Right Column: Selected Date & Unscheduled List */}
+            <div className="w-full lg:w-[400px] xl:w-[450px] bg-[var(--m3-surface-container-low)] flex flex-col overflow-hidden shadow-2xl lg:shadow-none border-t lg:border-t-0 border-[var(--m3-outline-variant)]/40 h-[60vh] lg:h-full">
+              <div className="flex-1 overflow-y-auto px-4 sm:px-6 py-6 space-y-8 custom-scrollbar">
+                
+                {/* Task List for Selected Date */}
+                <div className="space-y-5">
+                  <div className="flex items-center justify-between px-1">
+                    <div className="flex items-center gap-3">
+                      <div className="w-2 h-8 bg-[var(--m3-primary)] rounded-full" />
+                      <div>
+                        <h3 className="text-sm font-black text-[var(--m3-on-surface)] uppercase tracking-widest">
+                          {selectedDate ? format(selectedDate, language === 'ja' ? 'M/d 予定・タスク' : "Sch. for M/d", { locale: language === 'ja' ? ja : language === 'vi' ? vi : enUS }) : '---'}
+                        </h3>
+                        <p className="text-[10px] font-bold text-[var(--m3-on-surface-variant)] opacity-70">
+                          {selectedDateSubmissions.length} {language === 'ja' ? '件のアイテム' : 'items'}
+                        </p>
+                      </div>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <button
+                        onClick={() => setIsAddingEvent(!isAddingEvent)}
+                        className="flex items-center gap-1.5 text-[11px] font-black text-[var(--m3-primary)] bg-[var(--m3-primary)]/5 hover:bg-[var(--m3-primary)]/10 px-4 py-2 rounded-2xl transition-all shadow-sm border border-[var(--m3-primary)]/10"
                       >
-                        <div className={cn(
-                          "w-10 h-10 rounded-2xl flex items-center justify-center shrink-0 shadow-sm transition-all group-hover:scale-105",
-                          sub.status === 'completed' ? "bg-green-500/10 text-green-500" : "bg-[var(--m3-primary)]/5 text-[var(--m3-primary)]"
-                        )}>
-                          {sub.status === 'completed' ? <CheckCircle2 className="w-5 h-5" /> : <Clock className="w-5 h-5" />}
-                        </div>
-                        <div className="flex-1 min-w-0 pointer-events-none">
-                          <div className="flex items-center gap-2 mb-0.5">
-                            <span className="text-[10px] font-black uppercase tracking-tighter text-[var(--m3-primary)] opacity-70 truncate max-w-[80px]">{sub.subject}</span>
-                            {sub.priority === 'high' && <div className="w-1 h-1 rounded-full bg-red-500" />}
-                          </div>
-                          <h4 className="text-sm font-bold text-[var(--m3-on-surface)] truncate group-hover:text-[var(--m3-primary)] transition-colors">{sub.title}</h4>
-                        </div>
-                        <div className="text-right shrink-0 pointer-events-none">
-                          <div className="text-sm font-black text-[var(--m3-on-surface-variant)]">{sub.progress}%</div>
-                          <div className="w-12 h-1 bg-[var(--m3-outline-variant)]/40 rounded-full mt-1 overflow-hidden">
-                            <div 
-                              className="h-full bg-[var(--m3-primary)] transition-all duration-1000" 
-                              style={{ width: `${sub.progress}%` }} 
-                            />
-                          </div>
-                        </div>
-                      </DraggableTaskRender>
-                    </motion.div>
-                  ))}
-                </div>
-              ) : (
-                <div className="py-12 rounded-[32px] border-2 border-dashed border-[var(--m3-outline-variant)]/20 flex flex-col items-center justify-center text-center p-6 grayscale opacity-40">
-                  <div className="w-16 h-16 rounded-full bg-[var(--m3-surface-container)] flex items-center justify-center mb-4">
-                    <Calendar className="w-8 h-8 text-[var(--m3-on-surface-variant)]" />
+                        {isAddingEvent ? <X className="w-4 h-4" /> : <Plus className="w-4 h-4" />}
+                        {language === 'ja' ? '予定を追加' : 'Add Event'}
+                      </button>
+                      <button
+                        onClick={() => {
+                          setAddTaskType('percentage');
+                          setIsAdding(true);
+                        }}
+                        className="hidden sm:flex items-center gap-1.5 text-[11px] font-black text-[var(--m3-secondary)] bg-[var(--m3-secondary)]/5 hover:bg-[var(--m3-secondary)]/10 px-4 py-2 rounded-2xl transition-all shadow-sm border border-[var(--m3-secondary)]/10"
+                      >
+                        <BookOpen className="w-4 h-4" />
+                        {language === 'ja' ? '課題を追加' : 'Add Assignment'}
+                      </button>
+                    </div>
                   </div>
-                  <p className="text-sm font-bold text-[var(--m3-on-surface-variant)]">
-                    {language === 'ja' ? 'この日のタスクはありません' : 'No tasks for this day'}
-                  </p>
-                </div>
-              )}
-            </div>
 
-            {/* Unscheduled Tasks */}
-            <div className="space-y-4 pb-8 mt-8 border-t border-[var(--m3-outline-variant)]/20 pt-8">
-              <div className="flex items-center justify-between px-2">
-                <h3 className="text-sm font-black text-[var(--m3-on-surface-variant)] uppercase tracking-wider">
-                  {language === 'ja' ? '未スケジュールのタスク' : 'Unscheduled Tasks'}
-                </h3>
-                <span className="text-[10px] font-black px-2 py-0.5 rounded-full bg-[var(--m3-secondary)]/10 text-[var(--m3-secondary)]">
-                  {unscheduledSubmissions.length}
-                </span>
-              </div>
-              
-              {unscheduledSubmissions.length > 0 ? (
-                <div className="space-y-3">
-                  {unscheduledSubmissions.map((sub, idx) => (
-                    <motion.div
-                      key={sub.id}
-                      initial={{ opacity: 0, y: 10 }}
-                      animate={{ opacity: 1, y: 0 }}
-                      transition={{ delay: idx * 0.05 }}
-                      onClick={() => {
-                        setSelectedId(sub.id);
-                      }}
-                    >
-                      <DraggableTaskRender
-                        id={`task-${sub.id}`}
-                        className="group p-4 rounded-3xl bg-[var(--m3-surface-container)] border border-[var(--m3-outline)]/5 hover:border-[var(--m3-primary)]/20 hover:bg-[var(--m3-surface-container-highest)] transition-all cursor-grab active:cursor-grabbing flex items-center gap-4"
+                  <AnimatePresence>
+                    {isAddingEvent && (
+                      <motion.div
+                        initial={{ opacity: 0, scale: 0.95, y: -10 }}
+                        animate={{ opacity: 1, scale: 1, y: 0 }}
+                        exit={{ opacity: 0, scale: 0.95, y: -10 }}
+                        className="px-1 overflow-hidden"
                       >
-                        <div className={cn(
-                          "w-10 h-10 rounded-2xl flex items-center justify-center shrink-0 shadow-sm transition-all group-hover:scale-105",
-                          sub.status === 'completed' ? "bg-green-500/10 text-green-500" : "bg-[var(--m3-primary)]/5 text-[var(--m3-primary)]"
-                        )}>
-                          {sub.status === 'completed' ? <CheckCircle2 className="w-5 h-5" /> : <Clock className="w-5 h-5" />}
-                        </div>
-                        <div className="flex-1 min-w-0 pointer-events-none">
-                          <div className="flex items-center gap-2 mb-0.5">
-                            <span className="text-[10px] font-black uppercase tracking-tighter text-[var(--m3-primary)] opacity-70 truncate max-w-[80px]">{sub.subject}</span>
-                            {sub.priority === 'high' && <div className="w-1 h-1 rounded-full bg-red-500" />}
+                        <div className="flex flex-col gap-4 p-5 bg-[var(--m3-surface-container-highest)] rounded-[32px] border-2 border-[var(--m3-primary)]/20 shadow-xl ring-8 ring-[var(--m3-primary)]/5">
+                          <div className="flex items-center justify-between">
+                            <div className="flex items-center gap-2">
+                              <div className="w-8 h-8 rounded-xl bg-[var(--m3-primary)]/10 flex items-center justify-center">
+                                <Calendar className="w-4 h-4 text-[var(--m3-primary)]" />
+                              </div>
+                              <span className="text-[10px] font-black uppercase text-[var(--m3-primary)] tracking-widest">{language === 'ja' ? '新規予定の作成' : 'Create New Event'}</span>
+                            </div>
+                            <div className="flex gap-1">
+                              {(['low', 'medium', 'high'] as const).map(p => (
+                                <button
+                                  key={p}
+                                  onClick={() => setModalPriority(p)}
+                                  className={cn(
+                                    "w-3 h-3 rounded-full transition-all",
+                                    modalPriority === p ? "ring-2 ring-offset-2 ring-[var(--m3-outline)] scale-110" : "opacity-40 hover:opacity-100",
+                                    p === 'high' ? "bg-red-500" : p === 'medium' ? "bg-orange-500" : "bg-blue-500"
+                                  )}
+                                />
+                              ))}
+                            </div>
                           </div>
-                          <h4 className="text-sm font-bold text-[var(--m3-on-surface)] truncate group-hover:text-[var(--m3-primary)] transition-colors">{sub.title}</h4>
-                        </div>
-                        <div className="text-right shrink-0 pointer-events-none">
-                          <div className="text-sm font-black text-[var(--m3-on-surface-variant)]">{sub.progress}%</div>
-                          <div className="w-12 h-1 bg-[var(--m3-outline-variant)]/40 rounded-full mt-1 overflow-hidden">
-                            <div 
-                              className="h-full bg-[var(--m3-primary)] transition-all duration-1000" 
-                              style={{ width: `${sub.progress}%` }} 
+                          
+                          <div className="space-y-4">
+                            <input
+                              autoFocus
+                              type="text"
+                              value={newEventTitle}
+                              onChange={(e) => setNewEventTitle(e.target.value)}
+                              placeholder={language === 'ja' ? 'どのような予定ですか？' : 'What is the event?'}
+                              className="w-full bg-transparent text-lg font-black text-[var(--m3-on-surface)] placeholder:text-[var(--m3-on-surface-variant)]/30 focus:outline-none"
+                              onKeyDown={(e) => {
+                                if (e.key === 'Enter') handleAddEvent();
+                              }}
                             />
+                            
+                            <div className="flex flex-wrap gap-2">
+                              {['学校', '個人', '重要', '仕事', 'その他'].map(s => (
+                                <button
+                                  key={s}
+                                  onClick={() => setModalSubject(s)}
+                                  className={cn(
+                                    "px-3 py-1 rounded-full text-[9px] font-black uppercase tracking-wider transition-all",
+                                    modalSubject === s 
+                                      ? "bg-[var(--m3-primary)] text-[var(--m3-on-primary)] shadow-md" 
+                                      : "bg-[var(--m3-surface-container)] text-[var(--m3-on-surface-variant)] hover:bg-[var(--m3-surface-container-high)]"
+                                  )}
+                                >
+                                  {s}
+                                </button>
+                              ))}
+                            </div>
+                          </div>
+
+                          <div className="flex items-center justify-between pt-3 border-t border-[var(--m3-outline-variant)]/30 mt-2">
+                            <div className="flex flex-col">
+                              <span className="text-[10px] font-black text-[var(--m3-on-surface-variant)] opacity-50 uppercase tracking-tighter">{language === 'ja' ? '日付' : 'Date'}</span>
+                              <span className="text-xs font-black text-[var(--m3-on-surface)]">
+                                {selectedDate && format(selectedDate, 'yyyy MM/dd')}
+                              </span>
+                            </div>
+                            <div className="flex gap-2">
+                              <button
+                                onClick={() => setIsAddingEvent(false)}
+                                className="px-4 py-2 rounded-xl text-[11px] font-black text-[var(--m3-on-surface-variant)] hover:bg-[var(--m3-surface-container-high)] transition-all"
+                              >
+                                {language === 'ja' ? 'キャンセル' : 'Cancel'}
+                              </button>
+                              <button
+                                onClick={handleAddEvent}
+                                disabled={!newEventTitle.trim()}
+                                className="px-6 py-2 rounded-xl bg-[var(--m3-primary)] text-[var(--m3-on-primary)] text-[11px] font-black uppercase tracking-widest shadow-lg shadow-[var(--m3-primary)]/20 disabled:opacity-30 disabled:grayscale transition-all active:scale-95"
+                              >
+                                {language === 'ja' ? '作成' : 'Create'}
+                              </button>
+                            </div>
                           </div>
                         </div>
-                      </DraggableTaskRender>
-                    </motion.div>
-                  ))}
+                      </motion.div>
+                    )}
+                  </AnimatePresence>
+                  
+                  {selectedDateSubmissions.length > 0 ? (
+                    <div className="space-y-3 px-1">
+                      {selectedDateSubmissions.map((sub, idx) => (
+                        <motion.div
+                          key={sub.id}
+                          initial={{ opacity: 0, x: 20 }}
+                          animate={{ opacity: 1, x: 0 }}
+                          transition={{ delay: idx * 0.05 }}
+                          onClick={() => setSelectedId(sub.id)}
+                        >
+                          <DraggableTaskRender
+                            id={`task-${sub.id}`}
+                            className={cn(
+                              "group p-4 rounded-[28px] transition-all cursor-grab active:cursor-grabbing flex items-center gap-4 border shadow-sm",
+                              sub.status === 'completed' 
+                                ? "bg-[var(--m3-surface-container-low)] border-[var(--m3-outline-variant)]/40 opacity-70" 
+                                : "bg-[var(--m3-surface-container-highest)] border-[var(--m3-outline)]/10 hover:border-[var(--m3-primary)]/30 hover:shadow-lg"
+                            )}
+                          >
+                            <div className={cn(
+                              "w-10 h-10 rounded-2xl flex items-center justify-center shrink-0 shadow-sm transition-all group-hover:rotate-6 group-hover:scale-110",
+                              sub.status === 'completed' ? "bg-green-500/10 text-green-500" : 
+                              sub.isEvent ? "bg-[var(--m3-secondary-container)] text-[var(--m3-on-secondary-container)]" : "bg-[var(--m3-primary)]/5 text-[var(--m3-primary)]"
+                            )}>
+                              {sub.status === 'completed' ? <CheckCircle2 className="w-5 h-5" /> : 
+                               sub.isEvent ? <Calendar className="w-5 h-5" /> : <Clock className="w-5 h-5" />}
+                            </div>
+                            <div className="flex-1 min-w-0 pointer-events-none">
+                              <div className="flex items-center gap-2 mb-0.5">
+                                <span className={cn(
+                                  "text-[9px] font-black uppercase tracking-tighter truncate max-w-[100px]",
+                                  sub.isEvent ? "text-[var(--m3-secondary)]" : "text-[var(--m3-primary)]"
+                                )}>{sub.subject}</span>
+                                {sub.priority === 'high' && <div className="w-1.5 h-1.5 rounded-full bg-red-500 animate-pulse" />}
+                              </div>
+                              <h4 className="text-sm font-black text-[var(--m3-on-surface)] truncate group-hover:text-[var(--m3-primary)] transition-colors leading-tight">
+                                {sub.title}
+                              </h4>
+                            </div>
+                            <div className="text-right shrink-0 pointer-events-none">
+                              {!sub.isEvent && (
+                                <div className="text-xs font-black text-[var(--m3-on-surface-variant)]">{sub.progress}%</div>
+                              )}
+                              {sub.status === 'completed' && <div className="text-[10px] font-black text-green-600 uppercase tracking-widest">{language === 'ja' ? '完了' : 'Done'}</div>}
+                            </div>
+                          </DraggableTaskRender>
+                        </motion.div>
+                      ))}
+                    </div>
+                  ) : (
+                    <div className="py-16 rounded-[40px] border-2 border-dashed border-[var(--m3-outline-variant)]/30 flex flex-col items-center justify-center text-center p-8 bg-[var(--m3-surface-container)]/30 grayscale opacity-40">
+                      <div className="w-20 h-20 rounded-[32px] bg-[var(--m3-surface-container-high)] flex items-center justify-center mb-6 shadow-inner">
+                        <Calendar className="w-10 h-10 text-[var(--m3-on-surface-variant)]" />
+                      </div>
+                      <p className="text-sm font-black text-[var(--m3-on-surface-variant)] uppercase tracking-widest">
+                        {language === 'ja' ? 'この日の予定は空です' : 'Clear schedule'}
+                      </p>
+                      <p className="text-xs font-bold text-[var(--m3-on-surface-variant)]/60 mt-1 uppercase tracking-tighter">
+                        {language === 'ja' ? 'タスクをドロップして配置' : 'Drop tasks to schedule'}
+                      </p>
+                    </div>
+                  )}
                 </div>
-              ) : (
-                <div className="py-8 rounded-[32px] border border-dashed border-[var(--m3-outline-variant)]/20 flex flex-col items-center justify-center text-center p-6 opacity-60">
-                  <p className="text-xs font-bold text-[var(--m3-on-surface-variant)]">
-                    {language === 'ja' ? 'すべてのタスクがスケジュール済みです 🎉' : 'All tasks are scheduled 🎉'}
-                  </p>
-                </div>
-              )}
-            </div>
 
+                {/* Unscheduled Tasks */}
+                <div className="space-y-5 pt-8 border-t border-[var(--m3-outline-variant)]/40">
+                  <div className="flex items-center justify-between px-1">
+                    <div className="flex items-center gap-3">
+                      <div className="w-2 h-8 bg-[var(--m3-secondary)] rounded-full" />
+                      <div>
+                        <h3 className="text-sm font-black text-[var(--m3-on-surface)] uppercase tracking-widest">
+                          {language === 'ja' ? '未配置のタスク' : 'Unscheduled'}
+                        </h3>
+                        <p className="text-[10px] font-bold text-[var(--m3-on-surface-variant)] opacity-70">
+                          {unscheduledSubmissions.length} {language === 'ja' ? '件の保留' : 'pending'}
+                        </p>
+                      </div>
+                    </div>
+                  </div>
+
+                  <DroppableDateCell id="unscheduled" className="h-full">
+                    {unscheduledSubmissions.length > 0 ? (
+                      <div className="space-y-3 px-1 pb-12">
+                        {unscheduledSubmissions.map((sub, idx) => (
+                          <motion.div
+                            key={sub.id}
+                            initial={{ opacity: 0, y: 15 }}
+                            animate={{ opacity: 1, y: 0 }}
+                            transition={{ delay: idx * 0.05 }}
+                            onClick={() => setSelectedId(sub.id)}
+                          >
+                            <DraggableTaskRender
+                              id={`task-${sub.id}`}
+                              className="group p-4 rounded-[28px] bg-[var(--m3-surface-container-lowest)] border border-[var(--m3-outline)]/10 hover:border-[var(--m3-secondary)]/30 hover:shadow-lg transition-all cursor-grab active:cursor-grabbing flex items-center gap-4"
+                            >
+                              <div className={cn(
+                                "w-10 h-10 rounded-2xl flex items-center justify-center shrink-0 shadow-sm transition-all group-hover:rotate-[-6deg]",
+                                sub.status === 'completed' ? "bg-green-500/10 text-green-500" : "bg-[var(--m3-secondary)]/5 text-[var(--m3-secondary)]"
+                              )}>
+                                {sub.status === 'completed' ? <CheckCircle2 className="w-5 h-5" /> : <Clock className="w-5 h-5" />}
+                              </div>
+                              <div className="flex-1 min-w-0 pointer-events-none">
+                                <div className="flex items-center gap-2 mb-0.5">
+                                  <span className="text-[9px] font-black uppercase tracking-tighter text-[var(--m3-secondary)] opacity-70 truncate max-w-[100px]">{sub.subject}</span>
+                                </div>
+                                <h4 className="text-sm font-black text-[var(--m3-on-surface)] truncate group-hover:text-[var(--m3-secondary)] transition-colors leading-tight">{sub.title}</h4>
+                              </div>
+                            </DraggableTaskRender>
+                          </motion.div>
+                        ))}
+                      </div>
+                    ) : (
+                      <div className="py-10 rounded-[32px] border border-dashed border-[var(--m3-outline-variant)]/20 flex flex-col items-center justify-center text-center p-6 opacity-60 bg-[var(--m3-surface-container)]/20">
+                        <p className="text-[10px] font-black text-[var(--m3-on-surface-variant)] uppercase tracking-widest">
+                          {language === 'ja' ? 'すべてのタスクがスケジュール済み ✨' : 'All organized ✨'}
+                        </p>
+                      </div>
+                    )}
+                  </DroppableDateCell>
+                </div>
+              </div>
+            </div>
           </div>
           
-          <div className="p-6 bg-[var(--m3-surface-container)] border-t border-[var(--m3-outline-variant)]/20">
-            <button 
-              onClick={() => setIsCalendarOpen(false)}
-              className="w-full py-4 rounded-2xl bg-[var(--m3-primary)] text-[var(--m3-on-primary)] font-black text-sm shadow-lg shadow-[var(--m3-primary)]/20 transition-all hover:scale-[1.02] active:scale-[0.98]"
-            >
-              {language === 'ja' ? '閉じる' : 'Close'}
-            </button>
-          </div>
-          
-          <DragOverlay>
+          <DragOverlay modifiers={[snapCenterToCursor]} zIndex={200}>
             {activeDragTaskId ? (() => {
               const task = submissions.find(s => `task-${s.id}` === activeDragTaskId);
               if (!task) return null;
               return (
-                <div className="group p-4 rounded-3xl bg-[var(--m3-surface-container-highest)] border border-[var(--m3-primary)]/20 shadow-2xl flex items-center gap-4 rotate-2 scale-105 cursor-grabbing z-[9999] opacity-90 backdrop-blur-sm relative">
-                  <div className="w-10 h-10 rounded-2xl flex items-center justify-center shrink-0 shadow-sm bg-[var(--m3-surface)] text-[var(--m3-primary)]">
+                <div className="group p-4 rounded-[32px] bg-[var(--m3-surface-container-highest)] border-2 border-[var(--m3-primary)]/40 shadow-[0_20px_50px_rgba(0,0,0,0.3)] flex items-center gap-4 rotate-2 scale-105 cursor-grabbing z-[210] opacity-95 backdrop-blur-md ring-8 ring-[var(--m3-primary)]/5">
+                  <div className="w-10 h-10 rounded-2xl flex items-center justify-center shrink-0 shadow-sm bg-[var(--m3-primary)] text-[var(--m3-on-primary)] transition-transform group-active:rotate-12">
                     <BookOpen className="w-5 h-5" />
                   </div>
                   <div className="flex-1 min-w-0 pr-4">
-                    <div className="text-xs font-black uppercase tracking-widest text-[var(--m3-primary)] mb-1 opacity-80">{task.subject}</div>
-                    <div className="text-sm font-bold text-[var(--m3-on-surface)] truncate leading-tight">{task.title}</div>
+                    <div className="text-[10px] font-black uppercase tracking-widest text-[var(--m3-primary)] mb-1 opacity-80">{task.subject}</div>
+                    <div className="text-sm font-black text-[var(--m3-on-surface)] truncate leading-tight tracking-tight">{task.title}</div>
                   </div>
                 </div>
               );
@@ -2964,6 +3437,19 @@ export default function App() {
                         {t.complete}
                       </button>
                     )}
+
+                    {selectedSubmission.status === 'completed' && !selectedSubmission.isDeleted && activeTab === 'history' && (
+                      <button 
+                        onClick={(e) => {
+                          toggleComplete(selectedSubmission.id, e as any);
+                          setSelectedId(null);
+                        }}
+                        className="w-full flex items-center justify-center gap-2 px-4 py-3.5 rounded-2xl font-bold transition-all active:scale-[0.98] border border-[var(--m3-primary)]/20 text-[var(--m3-primary)] hover:bg-[var(--m3-primary)]/5"
+                      >
+                        <RotateCcw className="w-5 h-5" />
+                        {language === 'ja' ? '進行中に戻す' : 'Undo Complete'}
+                      </button>
+                    )}
                   </div>
                 </div>
               </div>
@@ -2981,7 +3467,7 @@ export default function App() {
           setAddTaskType('percentage');
           setIsAdding(true);
         }}
-        className="fixed bottom-6 right-6 sm:bottom-10 sm:right-10 w-14 h-14 sm:w-20 sm:h-20 bg-[#cdddf7] text-[#005696] rounded-full shadow-lg shadow-[#cdddf7]/50 flex items-center justify-center z-40 group hover:opacity-90 transition-all active:scale-95"
+        className="fixed bottom-6 right-6 sm:bottom-10 sm:right-10 w-14 h-14 sm:w-20 sm:h-20 bg-[#cdddf7] text-[#005696] rounded-full shadow-lg shadow-[#cdddf7]/50 flex items-center justify-center z-[170] group hover:opacity-90 transition-all active:scale-95"
       >
         <Plus className="w-8 h-8 sm:w-10 sm:h-10 transition-transform duration-300 group-hover:rotate-90" />
       </motion.button>
@@ -3153,6 +3639,16 @@ export default function App() {
                         required
                         defaultValue="23:59"
                         className="w-full sm:w-32 px-5 py-4 rounded-2xl bg-[var(--m3-surface-container)] border border-[var(--m3-outline)]/10 focus:outline-none focus:ring-4 focus:ring-[var(--m3-primary)]/10 font-bold text-[var(--m3-on-surface)] transition-all"
+                      />
+                    </div>
+                  </div>
+                  <div className="space-y-3">
+                    <label className="text-xs font-bold text-[var(--m3-on-surface-variant)] uppercase tracking-widest px-1">{language === 'ja' ? '予定日 (カレンダー配置)' : 'Scheduled Date (Calendar)'}</label>
+                    <div className="flex flex-col sm:flex-row gap-3">
+                       <input 
+                        name="scheduledDate"
+                        type="date"
+                        className="flex-1 px-5 py-4 rounded-2xl bg-[var(--m3-surface-container)] border border-[var(--m3-outline)]/10 focus:outline-none focus:ring-4 focus:ring-[var(--m3-primary)]/10 font-bold text-[var(--m3-on-surface)] transition-all placeholder:text-[var(--m3-on-surface-variant)]/50"
                       />
                     </div>
                   </div>
@@ -3677,6 +4173,17 @@ export default function App() {
                     </div>
                   </div>
                   <div className="space-y-3">
+                    <label className="text-xs font-bold text-[var(--m3-on-surface-variant)] uppercase tracking-widest px-1">{language === 'ja' ? '予定日 (カレンダー配置)' : 'Scheduled Date (Calendar)'}</label>
+                    <div className="flex flex-col sm:flex-row gap-3">
+                       <input 
+                        name="scheduledDate"
+                        type="date"
+                        defaultValue={editData.scheduledDate ? format(editData.scheduledDate, 'yyyy-MM-dd') : ''}
+                        className="flex-1 px-5 py-4 rounded-2xl bg-[var(--m3-surface-container)] border border-[var(--m3-outline)]/10 focus:outline-none focus:ring-4 focus:ring-[var(--m3-primary)]/10 font-bold text-[var(--m3-on-surface)] transition-all placeholder:text-[var(--m3-on-surface-variant)]/50"
+                      />
+                    </div>
+                  </div>
+                  <div className="space-y-3">
                     <label className="text-xs font-black text-[var(--m3-on-surface-variant)] uppercase tracking-widest px-1">{t.priority}</label>
                     <div className="flex flex-wrap gap-2">
                       {(['low', 'medium', 'high'] as const).map((p) => (
@@ -3836,7 +4343,7 @@ export default function App() {
               className="m3-card max-w-sm w-full p-8 space-y-6"
             >
               <h3 className="text-xl font-bold">{confirmDialog.title}</h3>
-              <p className="text-[var(--m3-on-surface-variant)] leading-relaxed">
+              <p className="text-[var(--m3-on-surface-variant)] leading-relaxed whitespace-pre-wrap">
                 {confirmDialog.message}
               </p>
               <div className="flex justify-end gap-3 pt-2">
@@ -4004,7 +4511,9 @@ function SubmissionCard({
   theme = 'light',
   isSelectionMode,
   isSelected,
-  onToggleSelect
+  onToggleSelect,
+  isHighlighted,
+  hasMoreInSeries
 }: { 
   submission: Submission; 
   onClick: () => void;
@@ -4016,6 +4525,8 @@ function SubmissionCard({
   isSelectionMode?: boolean;
   isSelected?: boolean;
   onToggleSelect?: (e: React.MouseEvent) => void;
+  isHighlighted?: boolean;
+  hasMoreInSeries?: boolean;
   key?: string | number;
 }) {
   const t = translations[language];
@@ -4028,7 +4539,7 @@ function SubmissionCard({
     if (submission.status === 'completed') return { tag: 'bg-[var(--m3-primary-container)] text-[var(--m3-on-primary-container)]', label: t.urgency_completed };
     
     if (daysLeft <= 0) return { tag: 'bg-[var(--m3-error-container)] text-[var(--m3-on-error-container)]', label: t.urgency_urgent };
-    if (daysLeft <= 3) return { tag: 'bg-[var(--m3-tertiary-container)] text-[var(--m3-on-tertiary-container)]', label: language === 'ja' ? '間近' : 'Soon' };
+    if (daysLeft <= 3) return { tag: 'bg-[var(--m3-secondary-container)] text-[var(--m3-on-secondary-container)]', label: language === 'ja' ? '間近' : 'Soon' };
     return { tag: 'bg-[var(--m3-primary-container)] text-[var(--m3-on-primary-container)]', label: t.urgency_normal };
   }, [daysLeft, submission.status, submission.priority, submission.isDeleted, t]);
 
@@ -4037,6 +4548,7 @@ function SubmissionCard({
       <motion.div
         layout
         layoutId={submission.id}
+        id={`task-card-${submission.id}`}
         initial={{ opacity: 0, scale: 0.9 }}
         animate={{ opacity: 1, scale: 1 }}
         exit={{ opacity: 0, scale: 0.9 }}
@@ -4049,7 +4561,8 @@ function SubmissionCard({
         whileTap={{ scale: 0.99 }}
         className={cn(
           "group relative bg-[var(--m3-surface-container)] rounded-[20px] p-5 flex items-center gap-4 border cursor-pointer transition-colors",
-          isSelected ? "border-[var(--m3-primary)] bg-[var(--m3-primary-container)]/10" : "border-[var(--m3-outline)]/10 hover:border-[var(--m3-primary)]/30"
+          isSelected ? "border-[var(--m3-primary)] bg-[var(--m3-primary-container)]/10" : "border-[var(--m3-outline)]/10 hover:border-[var(--m3-primary)]/30",
+          isHighlighted && "ring-2 ring-[var(--m3-primary)] shadow-lg shadow-[var(--m3-primary)]/20"
         )}
       >
         {isHistoryView && isSelectionMode && onToggleSelect && (
@@ -4073,7 +4586,7 @@ function SubmissionCard({
             <motion.span 
               layoutId={`subject-${submission.id}`} 
               transition={{ duration: 0.25, ease: "easeOut" }}
-              className="text-xs font-black text-[var(--m3-primary)] uppercase tracking-[0.15em]"
+              className="text-xs font-black text-[var(--m3-primary)] uppercase tracking-wider"
             >
               {submission.subject}
             </motion.span>
@@ -4098,6 +4611,7 @@ function SubmissionCard({
     <motion.div
       layout
       layoutId={submission.id}
+      id={`task-card-${submission.id}`}
       initial={{ opacity: 0, scale: 0.95, y: 10 }}
       animate={{ opacity: 1, scale: 1, y: 0 }}
       exit={{ opacity: 0, scale: 0.95, y: -10 }}
@@ -4110,19 +4624,28 @@ function SubmissionCard({
       whileTap={{ scale: 0.98 }}
       whileHover={{ y: -4 }}
       className={cn(
-        "group relative cursor-pointer bg-[var(--m3-surface-container)] flex flex-col justify-between overflow-hidden transition-[box-shadow,border-color,background-color] duration-300",
+        "group relative cursor-pointer bg-[var(--m3-surface-container)] flex flex-col justify-between overflow-visible transition-[box-shadow,border-color,background-color] duration-300",
         "h-full min-h-[180px] rounded-[24px] p-5 sm:p-6",
         "border border-white/10 dark:border-white/5 hover:border-[var(--m3-primary)]/40 hover:shadow-xl hover:shadow-[var(--m3-primary)]/10",
-        submission.priority === 'high' && submission.status !== 'completed' && "border-red-500/30 ring-1 ring-red-500/20 bg-gradient-to-br from-[var(--m3-surface-container)] to-red-500/10",
+        submission.priority === 'high' && submission.status !== 'completed' && "border-[var(--m3-error)]/30 ring-1 ring-[var(--m3-error)]/20 bg-gradient-to-br from-[var(--m3-surface-container)] to-[var(--m3-error)]/10",
+        isHighlighted && "ring-2 ring-[var(--m3-primary)] shadow-lg shadow-[var(--m3-primary)]/20 scale-[1.02]",
         theme === 'dog' && "hover:border-[#8b5a2b]/30",
         theme === 'cat' && "hover:border-[#c26978]/30",
         theme === 'animal' && "hover:border-[#b16300]/30",
         theme === 'flower' && "hover:border-[#9a4058]/30"
       )}
     >
+      {/* Visual Stacking Effect */}
+      {hasMoreInSeries && (
+        <>
+          <div className="absolute -bottom-1.5 left-2 right-2 h-full bg-[var(--m3-surface-container-low)] rounded-[24px] border border-white/5 -z-20 opacity-60" />
+          <div className="absolute -bottom-3 left-4 right-4 h-full bg-[var(--m3-surface-container-lowest)] rounded-[24px] border border-white/5 -z-30 opacity-40" />
+        </>
+      )}
+
       {submission.priority === 'high' && submission.status !== 'completed' && (
         <div className="absolute top-0 right-0 w-8 h-8 pointer-events-none overflow-hidden">
-          <div className="absolute top-1 right-1 w-2 h-2 bg-red-500 rounded-full animate-ping" />
+          <div className="absolute top-1 right-1 w-2 h-2 bg-[var(--m3-error)] rounded-full animate-ping" />
         </div>
       )}
 
@@ -4139,14 +4662,14 @@ function SubmissionCard({
         <div className="flex items-center justify-between gap-1 mb-1">
           <motion.span 
             layoutId={`subject-${submission.id}`} 
-            className="text-[10px] font-black uppercase tracking-[0.15em] text-[var(--m3-primary)]/80"
+            className="text-[10px] font-black uppercase tracking-wider text-[var(--m3-primary)]"
           >
             {submission.subject}
           </motion.span>
           <div className={cn(
-            "flex items-center gap-1 px-1.5 py-0.5 rounded-full text-[9px] font-black uppercase tracking-wider shadow-sm",
-            submission.priority === 'high' ? "bg-red-500 text-white" : 
-            submission.priority === 'medium' ? "bg-orange-500 text-white" : "bg-blue-500 text-white"
+            "flex items-center gap-1 px-2 py-0.5 rounded-full text-[9px] font-black uppercase tracking-wider shadow-sm",
+            submission.priority === 'high' ? "bg-[var(--m3-error)] text-white" : 
+            submission.priority === 'medium' ? "bg-amber-600 dark:bg-amber-500 text-white" : "bg-[var(--m3-secondary)] text-white"
           )}>
             {submission.priority === 'high' && <AlertCircle className="w-2.5 h-2.5" />}
             {t[submission.priority]}
@@ -4156,7 +4679,7 @@ function SubmissionCard({
           layoutId={`title-${submission.id}`} 
           className={cn(
             "text-base sm:text-lg font-bold text-[var(--m3-on-surface)] leading-snug tracking-tight break-words whitespace-normal",
-            submission.priority === 'high' && submission.status !== 'completed' && "text-red-700 dark:text-red-400"
+            submission.priority === 'high' && submission.status !== 'completed' && "text-[var(--m3-error)]"
           )}
         >
           {submission.title}
@@ -4168,7 +4691,7 @@ function SubmissionCard({
         <div className="flex flex-wrap items-center gap-1.5 sm:gap-2">
           <div className={cn(
             "inline-flex items-center gap-1.5 text-[11px] sm:text-xs font-bold px-2.5 py-1 sm:px-3 sm:py-1.5 rounded-xl transition-colors",
-            isOverdue ? "bg-red-100 dark:bg-red-900/30 text-red-600 dark:text-red-400" : "bg-[var(--m3-surface-variant)]/50 text-[var(--m3-on-surface-variant)]"
+            isOverdue ? "bg-[var(--m3-error-container)] text-[var(--m3-on-error-container)]" : "bg-[var(--m3-surface-variant)]/50 text-[var(--m3-on-surface-variant)]"
           )}>
             <Calendar className="w-3 h-3 sm:w-3.5 sm:h-3.5" />
             <span className="tabular-nums">
@@ -4182,6 +4705,13 @@ function SubmissionCard({
           )}>
             {urgencyStyles.label}
           </div>
+          
+          {submission.scheduledDate && (
+            <div className="flex items-center gap-1 sm:gap-1.5 text-[10px] sm:text-[11px] font-bold bg-[var(--m3-secondary-container)] text-[var(--m3-on-secondary-container)] shrink-0 px-1.5 py-0.5 sm:px-2 sm:py-1 rounded-lg">
+              <Calendar className="w-2.5 h-2.5 sm:w-3 sm:h-3" />
+              <span>{format(submission.scheduledDate, language === 'ja' ? 'M/d 予定' : 'On M/d')}</span>
+            </div>
+          )}
 
           {submission.taskType === 'pages' && (
             <div className="flex items-center gap-1 sm:gap-1.5 text-[10px] sm:text-[11px] font-bold text-[var(--m3-on-surface-variant)] opacity-70 shrink-0">
@@ -4194,25 +4724,27 @@ function SubmissionCard({
         </div>
         
         {/* Progress Section */}
-        <div className="flex flex-col gap-1 shrink-0 py-0.5">
-          <div className="flex justify-between items-end w-full px-0.5">
-            <span className="text-[9px] sm:text-[10px] uppercase font-black tracking-widest text-[var(--m3-on-surface-variant)] opacity-50">
-              {t.progress}
-            </span>
-            <span className="text-xs sm:text-sm font-black tabular-nums text-[var(--m3-primary)]">{submission.progress}%</span>
+        {!submission.isEvent && (
+          <div className="flex flex-col gap-1 shrink-0 py-0.5">
+            <div className="flex justify-between items-end w-full px-0.5">
+              <span className="text-[9px] sm:text-[10px] uppercase font-black tracking-widest text-[var(--m3-on-surface-variant)]">
+                {t.progress}
+              </span>
+              <span className="text-xs sm:text-sm font-black tabular-nums text-[var(--m3-primary)]">{submission.progress}%</span>
+            </div>
+            <div className="h-1.5 sm:h-2 w-full bg-[var(--m3-surface-variant)]/60 rounded-full overflow-hidden shadow-inner">
+              <motion.div 
+                initial={{ width: 0 }}
+                animate={{ width: `${submission.progress}%` }}
+                transition={{ duration: 0.8, ease: [0.16, 1, 0.3, 1] }}
+                className={cn(
+                  "h-full rounded-full transition-all duration-500",
+                  daysLeft <= 0 ? "bg-[var(--m3-error)]" : "bg-[var(--m3-primary)]"
+                )}
+              />
+            </div>
           </div>
-          <div className="h-1.5 sm:h-2 w-full bg-[var(--m3-surface-variant)]/60 rounded-full overflow-hidden shadow-inner">
-            <motion.div 
-              initial={{ width: 0 }}
-              animate={{ width: `${submission.progress}%` }}
-              transition={{ duration: 0.8, ease: [0.16, 1, 0.3, 1] }}
-              className={cn(
-                "h-full rounded-full transition-all duration-500",
-                daysLeft <= 0 ? "bg-red-500" : "bg-[var(--m3-primary)]"
-              )}
-            />
-          </div>
-        </div>
+        )}
       </div>
     </motion.div>
   );
@@ -4229,7 +4761,9 @@ const MemoizedSubmissionCard = React.memo(SubmissionCard, (prev, next) => {
          prev.language === next.language &&
          prev.theme === next.theme &&
          prev.isSelectionMode === next.isSelectionMode &&
-         prev.isSelected === next.isSelected;
+         prev.isSelected === next.isSelected &&
+         prev.isHighlighted === next.isHighlighted &&
+         prev.hasMoreInSeries === next.hasMoreInSeries;
 });
 
 function SortableSubjectItem({ subject, onDelete, language, t }: { 

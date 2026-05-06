@@ -99,6 +99,14 @@ export const translations = {
     progressLabel: "進捗",
     logout: "ログアウト",
     version: "バージョン",
+    sortBy: "並び替え",
+    sort_deadline: "締切日順",
+    sort_scheduled: "やる日順",
+    sort_priority: "優先度順",
+    sort_progress: "進捗順",
+    search: "検索",
+    searchPlaceholder: "タスクを検索...",
+    keyboardShortcuts: "ショートカット",
   },
   en: {
     appName: "Study Tracker",
@@ -200,6 +208,14 @@ export const translations = {
     progressLabel: "Progress",
     logout: "Logout",
     version: "Version",
+    sortBy: "Sort by",
+    sort_deadline: "Deadline",
+    sort_scheduled: "Scheduled",
+    sort_priority: "Priority",
+    sort_progress: "Progress",
+    search: "Search",
+    searchPlaceholder: "Search tasks...",
+    keyboardShortcuts: "Shortcuts",
   }
 };
 
