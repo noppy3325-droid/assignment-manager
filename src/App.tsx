@@ -135,20 +135,20 @@ const DEFAULT_SUBJECTS = [
   "世界史", "日本史", "地理", "現代社会", "倫理", "政治・経済", "情報", "その他"
 ];
 
-const APP_VERSION = '1.3.1';
+const APP_VERSION = '1.3.2';
 
 const RELEASE_NOTES = {
-  version: '1.3.1',
-  title: "🚀 アップデート情報 (v1.3.1)",
+  version: '1.3.2',
+  title: "🚀 アップデート情報 (v1.3.2)",
   features: {
     title: "✨ 修正・改善内容",
     items: [
-      "デスクトップ版のヘッダーにカレンダー・設定・ログアウトボタンを追加しました",
-      "モバイル版メニューを刷新し、操作ボタンを画面下部にコンパクトに配置しました",
-      "「進行中/アーカイブ」タブをサイドバー（デスクトップ）に移動し、メイン画面をスッキリさせました",
-      "モバイル版のタスク一覧に適切な余白を追加し、視認性を向上させました",
-      "ドラッグ＆ドロップ時の表示を改善し、移動中のタスクが見やすくなりました",
-      "メニュー内の一部表記（カレンダー等）の日本語化を修正しました"
+      "検索バーをアイコン化し、クリック or /キーで展開するように改善しました（画面の圧迫感を軽減）",
+      "カレンダー表示中は、右下のメイン追加ボタンを非表示にしました（既存の追加UIと重複するため）",
+      "キーボードショートカット一覧を「設定」メニュー内に統合し、ヘッダーを整理しました",
+      "タスク選択時の表示不具合（一部が欠ける現象）を修正しました",
+      "カレンダー内の日付指定（年月日）を自由に行えるように改善しました",
+      "英語設定時のカレンダー表示不具合を修正しました"
     ]
   }
 };
@@ -325,6 +325,7 @@ export default function App() {
   const [sortCriteria, setSortCriteria] = useState<'deadline' | 'scheduled' | 'priority' | 'progress'>('scheduled');
   const [searchQuery, setSearchQuery] = useState("");
   const [debouncedSearchQuery, setDebouncedSearchQuery] = useState("");
+  const [isSearchExpanded, setIsSearchExpanded] = useState(false);
   const [highlightedTaskId, setHighlightedTaskId] = useState<string | null>(null);
   const searchInputRef = useRef<HTMLInputElement>(null);
 
@@ -1308,6 +1309,10 @@ export default function App() {
 
       // Escape always works
       if (e.key === 'Escape') {
+        if (document.activeElement === searchInputRef.current && searchQuery === "") {
+          setIsSearchExpanded(false);
+          searchInputRef.current?.blur();
+        }
         setIsAdding(false);
         setIsEditing(false);
         setSelectedId(null);
@@ -1335,6 +1340,7 @@ export default function App() {
       // Search with '/'
       if (e.key === '/') {
         e.preventDefault();
+        setIsSearchExpanded(true);
         searchInputRef.current?.focus();
         return;
       }
@@ -1387,7 +1393,7 @@ export default function App() {
       // Task Navigation (j/k or Arrows)
       if (e.key === 'j' || e.key === 'ArrowDown' || e.key === 'k' || e.key === 'ArrowUp') {
         e.preventDefault();
-        const allTasks = Object.values(groupedSubmissions).flat();
+        const allTasks = Object.values(groupedSubmissions).flat() as Submission[];
         if (allTasks.length === 0) return;
 
         let nextId = allTasks[0].id;
@@ -1949,22 +1955,6 @@ export default function App() {
               </button>
               <div className="mx-1 h-6 w-px bg-[var(--m3-outline-variant)]/40" />
               <button 
-                onClick={() => {
-                  setConfirmDialog({
-                    title: t.keyboardShortcuts,
-                    message: language === 'ja' 
-                      ? '• a / ctrl+k : 新規タスク\n• / : 検索\n• s : 並び替え順を切り替え\n• c : カレンダーを開く\n• h : アーカイブ切り替え\n• j / k / 矢印 : タスクを選択\n• Enter : 詳細を開く / 完了'
-                      : '• a / ctrl+k : New Task\n• / : Search\n• s : Cycle Sorting\n• c : Open Calendar\n• h : Toggle Archive\n• j / k / Arrows : Select Task\n• Enter : Details / Complete',
-                    onConfirm: () => setConfirmDialog(null),
-                    confirmLabel: 'OK'
-                  });
-                }}
-                className="p-3 rounded-full hover:bg-[var(--m3-surface-container)] text-[var(--m3-on-surface-variant)] transition-all active:scale-95"
-                title={t.keyboardShortcuts}
-              >
-                <Keyboard className="w-6 h-6" />
-              </button>
-              <button 
                 onClick={logout}
                 className="p-3 rounded-full hover:bg-[var(--m3-error-container)]/50 text-[var(--m3-on-surface-variant)] hover:text-[var(--m3-error)] transition-all active:scale-95"
                 title={t.logout}
@@ -1996,21 +1986,45 @@ export default function App() {
         <div className="mb-6 space-y-4">
           <div className="flex flex-col md:flex-row gap-4">
             {/* Search Input */}
-            <div className="relative flex-1 group">
-              <div className="absolute left-4 top-1/2 -translate-y-1/2 text-[var(--m3-on-surface-variant)]/40 group-focus-within:text-[var(--m3-primary)] transition-colors">
+            <div 
+              className={cn(
+                "relative group transition-all duration-300 ease-[cubic-bezier(0.2,0,0,1)]",
+                (isSearchExpanded || searchQuery) ? "flex-1 w-full md:w-auto" : "w-[84px] shrink-0 cursor-pointer"
+              )}
+              onClick={() => {
+                if (!isSearchExpanded) {
+                  setIsSearchExpanded(true);
+                  setTimeout(() => searchInputRef.current?.focus(), 50);
+                }
+              }}
+            >
+              <div className="absolute left-4 top-1/2 -translate-y-1/2 text-[var(--m3-on-surface-variant)]/40 group-focus-within:text-[var(--m3-primary)] transition-colors pointer-events-none z-10">
                 <Search className="w-5 h-5" />
               </div>
               <input
                 ref={searchInputRef}
                 type="text"
                 value={searchQuery}
+                onFocus={() => setIsSearchExpanded(true)}
+                onBlur={() => { if (!searchQuery) setIsSearchExpanded(false); }}
                 onChange={(e) => setSearchQuery(e.target.value)}
-                placeholder={t.searchPlaceholder}
-                className="w-full pl-12 pr-4 py-3.5 rounded-2xl bg-[var(--m3-surface-container-high)] border border-[var(--m3-outline-variant)]/20 focus:outline-none focus:ring-4 focus:ring-[var(--m3-primary)]/10 font-bold text-[var(--m3-on-surface)] transition-all"
+                placeholder={(isSearchExpanded || searchQuery) ? t.searchPlaceholder : ""}
+                className={cn(
+                  "w-full h-full min-h-[50px] py-3.5 bg-[var(--m3-surface-container-high)] border border-[var(--m3-outline-variant)]/20 focus:outline-none focus:ring-4 focus:ring-[var(--m3-primary)]/10 font-bold text-[var(--m3-on-surface)] transition-all",
+                  (isSearchExpanded || searchQuery) ? "pl-12 pr-12 rounded-2xl cursor-text" : "pl-11 pr-2 rounded-full cursor-pointer text-transparent"
+                )}
+                readOnly={!(isSearchExpanded || searchQuery)}
               />
-              <div className="absolute right-4 top-1/2 -translate-y-1/2 hidden md:flex items-center gap-1 px-1.5 py-0.5 rounded-md bg-[var(--m3-surface-variant)]/50 border border-[var(--m3-outline-variant)]/40 text-[10px] font-black text-[var(--m3-on-surface-variant)]/60">
-                <span>/</span>
-              </div>
+              {!(isSearchExpanded || searchQuery) && (
+                <div className="absolute right-3.5 top-1/2 -translate-y-1/2 flex items-center justify-center pointer-events-none">
+                  <span className="text-[14px] font-black text-[var(--m3-on-surface-variant)]/60">/</span>
+                </div>
+              )}
+              {(isSearchExpanded || searchQuery) && (
+                 <div className="absolute right-4 top-1/2 -translate-y-1/2 hidden md:flex items-center gap-1 px-1.5 py-0.5 rounded-md bg-[var(--m3-surface-variant)]/50 border border-[var(--m3-outline-variant)]/40 text-[10px] font-black text-[var(--m3-on-surface-variant)]/60 pointer-events-none">
+                   <span>/</span>
+                 </div>
+              )}
             </div>
 
             {/* Sort Toggle */}
@@ -2759,8 +2773,8 @@ export default function App() {
                     <div className="flex items-center gap-3">
                       <div className="w-2 h-8 bg-[var(--m3-primary)] rounded-full" />
                       <div>
-                        <h3 className="text-sm font-black text-[var(--m3-on-surface)] uppercase tracking-widest">
-                          {selectedDate ? format(selectedDate, language === 'ja' ? 'M/d 予定・タスク' : "Sch. for M/d", { locale: language === 'ja' ? ja : language === 'vi' ? vi : enUS }) : '---'}
+                        <h3 className="text-sm font-black text-[var(--m3-on-surface)] tracking-widest">
+                          {selectedDate ? (language === 'ja' ? format(selectedDate, 'M/d 予定・タスク', { locale: ja }) : format(selectedDate, 'MMM d', { locale: language === 'vi' ? vi : enUS }) + ' Tasks') : '---'}
                         </h3>
                         <p className="text-[10px] font-bold text-[var(--m3-on-surface-variant)] opacity-70">
                           {selectedDateSubmissions.length} {language === 'ja' ? '件のアイテム' : 'items'}
@@ -2853,9 +2867,15 @@ export default function App() {
                           <div className="flex items-center justify-between pt-3 border-t border-[var(--m3-outline-variant)]/30 mt-2">
                             <div className="flex flex-col">
                               <span className="text-[10px] font-black text-[var(--m3-on-surface-variant)] opacity-50 uppercase tracking-tighter">{language === 'ja' ? '日付' : 'Date'}</span>
-                              <span className="text-xs font-black text-[var(--m3-on-surface)]">
-                                {selectedDate && format(selectedDate, 'yyyy MM/dd')}
-                              </span>
+                              <input 
+                                type="date"
+                                value={selectedDate ? format(selectedDate, 'yyyy-MM-dd') : ''}
+                                onChange={(e) => {
+                                  const d = new Date(e.target.value);
+                                  if (!isNaN(d.getTime())) setSelectedDate(d);
+                                }}
+                                className="text-xs font-black text-[var(--m3-on-surface)] bg-transparent focus:outline-none border-b border-dashed border-[var(--m3-outline-variant)] hover:border-[var(--m3-primary)] transition-colors cursor-pointer"
+                              />
                             </div>
                             <div className="flex gap-2">
                               <button
@@ -3223,6 +3243,31 @@ export default function App() {
               </div>
             </div>
 
+            <div className="space-y-4 pt-4 border-t border-[var(--m3-outline)]/10">
+              <div className="flex flex-col gap-1">
+                <label className="text-xs font-bold text-[var(--m3-on-surface-variant)] uppercase tracking-wider">{t.keyboardShortcuts}</label>
+              </div>
+              <button 
+                onClick={() => {
+                  setConfirmDialog({
+                    title: t.keyboardShortcuts,
+                    message: language === 'ja' 
+                      ? '• a / ctrl+k : 新規タスク\n• / : 検索\n• s : 並び替え順を切り替え\n• c : カレンダーを開く\n• h : アーカイブ切り替え\n• j / k / 矢印 : タスクを選択\n• Enter : 詳細を開く / 完了'
+                      : '• a / ctrl+k : New Task\n• / : Search\n• s : Cycle Sorting\n• c : Open Calendar\n• h : Toggle Archive\n• j / k / Arrows : Select Task\n• Enter : Details / Complete',
+                    onConfirm: () => setConfirmDialog(null),
+                    confirmLabel: 'OK'
+                  });
+                }}
+                className="w-full px-4 py-3 bg-[var(--m3-surface-container)] hover:bg-[var(--m3-surface-container-high)] text-[var(--m3-on-surface)] rounded-xl flex items-center justify-between transition-colors shadow-sm border border-[var(--m3-outline)]/10"
+              >
+                <div className="flex items-center gap-3">
+                  <Keyboard className="w-5 h-5 text-[var(--m3-primary)]" />
+                  <span className="text-sm font-bold">{t.keyboardShortcuts}</span>
+                </div>
+                <ChevronRight className="w-5 h-5 opacity-50" />
+              </button>
+            </div>
+
             <div className="pt-6 border-t border-[var(--m3-outline)]/10 text-center">
                 <div className="text-xs font-black text-[var(--m3-on-surface-variant)] uppercase tracking-[0.2em] mb-2">{t.feedback}</div>
               <p className="text-xs text-[var(--m3-on-surface-variant)]/60 font-medium mb-4">
@@ -3458,19 +3503,21 @@ export default function App() {
         )}
       </AnimatePresence>
 
-      <motion.button
-        whileHover={{ scale: 1.05 }}
-        whileTap={{ scale: 0.95 }}
-        transition={{ duration: 0.2, ease: "easeOut" }}
-        onClick={() => {
-          setModalPriority('medium');
-          setAddTaskType('percentage');
-          setIsAdding(true);
-        }}
-        className="fixed bottom-6 right-6 sm:bottom-10 sm:right-10 w-14 h-14 sm:w-20 sm:h-20 bg-[#cdddf7] text-[#005696] rounded-full shadow-lg shadow-[#cdddf7]/50 flex items-center justify-center z-[170] group hover:opacity-90 transition-all active:scale-95"
-      >
-        <Plus className="w-8 h-8 sm:w-10 sm:h-10 transition-transform duration-300 group-hover:rotate-90" />
-      </motion.button>
+      {!isCalendarOpen && (
+        <motion.button
+          whileHover={{ scale: 1.05 }}
+          whileTap={{ scale: 0.95 }}
+          transition={{ duration: 0.2, ease: "easeOut" }}
+          onClick={() => {
+            setModalPriority('medium');
+            setAddTaskType('percentage');
+            setIsAdding(true);
+          }}
+          className="fixed bottom-6 right-6 sm:bottom-10 sm:right-10 w-14 h-14 sm:w-20 sm:h-20 bg-[#cdddf7] text-[#005696] rounded-full shadow-lg shadow-[#cdddf7]/50 flex items-center justify-center z-[170] group hover:opacity-90 transition-all active:scale-95"
+        >
+          <Plus className="w-8 h-8 sm:w-10 sm:h-10 transition-transform duration-300 group-hover:rotate-90" />
+        </motion.button>
+      )}
 
       {/* Add Modal */}
       <AnimatePresence>
@@ -4628,7 +4675,7 @@ function SubmissionCard({
         "h-full min-h-[180px] rounded-[24px] p-5 sm:p-6",
         "border border-white/10 dark:border-white/5 hover:border-[var(--m3-primary)]/40 hover:shadow-xl hover:shadow-[var(--m3-primary)]/10",
         submission.priority === 'high' && submission.status !== 'completed' && "border-[var(--m3-error)]/30 ring-1 ring-[var(--m3-error)]/20 bg-gradient-to-br from-[var(--m3-surface-container)] to-[var(--m3-error)]/10",
-        isHighlighted && "ring-2 ring-[var(--m3-primary)] shadow-lg shadow-[var(--m3-primary)]/20 scale-[1.02]",
+        isHighlighted && "ring-2 ring-[var(--m3-primary)] shadow-lg shadow-[var(--m3-primary)]/20",
         theme === 'dog' && "hover:border-[#8b5a2b]/30",
         theme === 'cat' && "hover:border-[#c26978]/30",
         theme === 'animal' && "hover:border-[#b16300]/30",
