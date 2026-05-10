@@ -9,6 +9,7 @@ import confetti from 'canvas-confetti';
 import { 
   DndContext, 
   closestCenter,
+  pointerWithin,
   KeyboardSensor,
   PointerSensor,
   useSensor,
@@ -32,6 +33,7 @@ import * as holiday_jp from '@holiday-jp/holiday_jp';
 import { cn } from './lib/utils';
 import { translations, Language } from './translations';
 
+import { GoogleAuthProvider } from 'firebase/auth';
 import { 
   auth, 
   db, 
@@ -135,20 +137,16 @@ const DEFAULT_SUBJECTS = [
   "世界史", "日本史", "地理", "現代社会", "倫理", "政治・経済", "情報", "その他"
 ];
 
-const APP_VERSION = '1.3.2';
+const APP_VERSION = '1.3.4';
 
 const RELEASE_NOTES = {
-  version: '1.3.2',
-  title: "🚀 アップデート情報 (v1.3.2)",
+  version: '1.3.4',
+  title: "🚀 アップデート情報 (v1.3.4)",
   features: {
     title: "✨ 修正・改善内容",
     items: [
-      "検索バーをアイコン化し、クリック or /キーで展開するように改善しました（画面の圧迫感を軽減）",
-      "カレンダー表示中は、右下のメイン追加ボタンを非表示にしました（既存の追加UIと重複するため）",
-      "キーボードショートカット一覧を「設定」メニュー内に統合し、ヘッダーを整理しました",
-      "タスク選択時の表示不具合（一部が欠ける現象）を修正しました",
-      "カレンダー内の日付指定（年月日）を自由に行えるように改善しました",
-      "英語設定時のカレンダー表示不具合を修正しました"
+      "🗓️ Googleカレンダーへの同期機能を追加しました（詳細な案内表示も追加）",
+      "👋 初回ログインのユーザー向けに、アプリの概要と使い方のウェルカムポップアップを追加しました"
     ]
   }
 };
@@ -289,6 +287,111 @@ const DraggableTaskRender: React.FC<{ id: string, children: React.ReactNode, cla
   );
 };
 
+// Memoized Background component to reduce re-renders and CPU load
+const ThemeBackground = React.memo(({ theme }: { theme: string }) => {
+  if (theme === 'light' || theme === 'dark') return null;
+
+  return (
+    <>
+      {theme === 'dog' && (
+        <>
+          <div className="fixed inset-0 pointer-events-none z-0 overflow-hidden opacity-[0.06] text-[var(--m3-primary)] mix-blend-multiply flex items-center justify-center">
+            <motion.div
+              animate={{ rotate: [-2, 2, -2], x: [-10, 10, -10] }}
+              transition={{ duration: 30, repeat: Infinity, ease: "linear" }}
+            >
+              <Dog className="w-[120vw] h-[120vh] -rotate-12 translate-x-1/4 translate-y-1/4 stroke-[0.3]" />
+            </motion.div>
+          </div>
+          <motion.div 
+            animate={{ y: [0, -15, 0], rotate: [12, 15, 12] }}
+            transition={{ duration: 12, repeat: Infinity, ease: "easeInOut" }}
+            className="fixed top-20 right-[10%] opacity-[0.08] pointer-events-none z-0 scale-150"
+          >
+            <Dog className="w-40 h-40" />
+          </motion.div>
+          <motion.div 
+            animate={{ x: [0, 10, 0], rotate: [-45, -40, -45] }}
+            transition={{ duration: 16, repeat: Infinity, ease: "easeInOut" }}
+            className="fixed bottom-40 left-[5%] opacity-[0.08] pointer-events-none z-0"
+          >
+            <PawPrint className="w-32 h-32" />
+          </motion.div>
+        </>
+      )}
+      {theme === 'cat' && (
+        <>
+          <div className="fixed inset-0 pointer-events-none z-0 overflow-hidden opacity-[0.06] text-[var(--m3-primary)] mix-blend-multiply flex items-center justify-center">
+            <motion.div
+              animate={{ rotate: [2, -2, 2], y: [-10, 10, -10] }}
+              transition={{ duration: 40, repeat: Infinity, ease: "linear" }}
+            >
+              <Cat className="w-[120vw] h-[120vh] rotate-12 translate-x-1/4 translate-y-1/4 stroke-[0.3]" />
+            </motion.div>
+          </div>
+          <motion.div 
+            animate={{ scale: [1, 1.1, 1], rotate: [-12, -15, -12] }}
+            transition={{ duration: 14, repeat: Infinity, ease: "easeInOut" }}
+            className="fixed top-40 left-[15%] opacity-[0.08] pointer-events-none z-0"
+          >
+            <Cat className="w-48 h-48" />
+          </motion.div>
+          <motion.div 
+            animate={{ y: [0, -20, 0], rotate: [45, 50, 45] }}
+            transition={{ duration: 20, repeat: Infinity, ease: "easeInOut" }}
+            className="fixed bottom-20 right-[8%] opacity-[0.08] pointer-events-none z-0"
+          >
+            <PawPrint className="w-24 h-24" />
+          </motion.div>
+        </>
+      )}
+      {theme === 'animal' && (
+        <>
+          <div className="fixed inset-0 pointer-events-none z-0 overflow-hidden opacity-[0.06] text-[var(--m3-primary)] mix-blend-multiply flex items-center justify-center">
+            <motion.div
+              animate={{ x: [-20, 20, -20] }}
+              transition={{ duration: 50, repeat: Infinity, ease: "linear" }}
+            >
+              <Rabbit className="w-[120vw] h-[120vh] -rotate-12 translate-x-1/4 translate-y-1/4 stroke-[0.3]" />
+            </motion.div>
+          </div>
+          <motion.div 
+            animate={{ y: [0, -10, 0] }}
+            transition={{ duration: 8, repeat: Infinity, ease: "easeInOut" }}
+            className="fixed top-1/4 right-[5%] opacity-[0.08] pointer-events-none z-0 rotate-12"
+          >
+            <Rabbit className="w-56 h-56" />
+          </motion.div>
+          <motion.div 
+            animate={{ scale: [1, 1.2, 1] }}
+            transition={{ duration: 24, repeat: Infinity, ease: "linear" }}
+            className="fixed bottom-1/4 left-[10%] opacity-[0.08] pointer-events-none z-0 -rotate-12"
+          >
+            <Bird className="w-32 h-32" />
+          </motion.div>
+        </>
+      )}
+      {theme === 'flower' && (
+        <>
+          <div className="fixed inset-0 pointer-events-none z-0 overflow-hidden opacity-[0.15] mix-blend-multiply">
+            <motion.div animate={{ y: [0, -15, 0], rotate: [0, 10, 0] }} transition={{ duration: 16, repeat: Infinity }} className="absolute top-[5%] left-[10%] text-pink-500"><Flower className="w-24 h-24" /></motion.div>
+            <motion.div animate={{ y: [0, 20, 0], rotate: [0, -15, 0] }} transition={{ duration: 24, repeat: Infinity }} className="absolute top-[15%] left-[40%] text-orange-400"><Flower2 className="w-16 h-16" /></motion.div>
+            <motion.div animate={{ scale: [1, 1.1, 1], rotate: [0, 5, 0] }} transition={{ duration: 20, repeat: Infinity }} className="absolute top-[8%] left-[75%] text-yellow-500"><Flower className="w-32 h-32" /></motion.div>
+            
+            <motion.div animate={{ x: [-10, 10, -10], rotate: [12, 15, 12] }} transition={{ duration: 30, repeat: Infinity }} className="absolute top-[45%] left-[5%] text-blue-400"><Flower2 className="w-20 h-20" /></motion.div>
+            <motion.div animate={{ rotate: 360 }} transition={{ duration: 80, repeat: Infinity, ease: "linear" }} className="absolute top-[50%] left-[50%] -translate-x-1/2 -translate-y-1/2 text-red-500 opacity-20"><Flower className="w-[40vw] h-[40vw] stroke-[0.5]" /></motion.div>
+            <motion.div animate={{ scale: [0.9, 1.05, 0.9], rotate: [-10, -5, -10] }} transition={{ duration: 28, repeat: Infinity }} className="absolute top-[40%] left-[85%] text-purple-400"><Flower className="w-28 h-28" /></motion.div>
+            
+            <motion.div animate={{ y: [0, 30, 0], x: [0, 10, 0] }} transition={{ duration: 22, repeat: Infinity }} className="absolute bottom-[15%] left-[15%] text-red-400"><Flower className="w-20 h-20" /></motion.div>
+            <motion.div animate={{ rotate: -360 }} transition={{ duration: 100, repeat: Infinity, ease: "linear" }} className="absolute bottom-[10%] left-[45%] text-green-400"><Flower2 className="w-16 h-16" /></motion.div>
+            <motion.div animate={{ y: [0, -20, 0], scale: [1, 1.2, 1] }} transition={{ duration: 18, repeat: Infinity }} className="absolute bottom-[20%] left-[80%] text-pink-400"><Flower2 className="w-24 h-24" /></motion.div>
+          </div>
+        </>
+      )}
+    </>
+  );
+});
+
 export default function App() {
   const [user, setUser] = useState<User | null>(null);
   const [isAuthReady, setIsAuthReady] = useState(false);
@@ -320,8 +423,25 @@ export default function App() {
     return localStorage.getItem('app-last-version') !== APP_VERSION;
   });
   const [showTermsModal, setShowTermsModal] = useState(false);
+  const [showWelcomeModal, setShowWelcomeModal] = useState(false);
   const [hasScrolledToBottom, setHasScrolledToBottom] = useState(false);
   const [tempAccepted, setTempAccepted] = useState(false);
+
+  useEffect(() => {
+    if (user) {
+      const hasSeen = localStorage.getItem(`app-welcome-${user.uid}`);
+      if (!hasSeen) {
+        setShowWelcomeModal(true);
+      }
+    }
+  }, [user]);
+
+  const handleCloseWelcomeModal = () => {
+    if (user) {
+      localStorage.setItem(`app-welcome-${user.uid}`, 'true');
+    }
+    setShowWelcomeModal(false);
+  };
   const [sortCriteria, setSortCriteria] = useState<'deadline' | 'scheduled' | 'priority' | 'progress'>('scheduled');
   const [searchQuery, setSearchQuery] = useState("");
   const [debouncedSearchQuery, setDebouncedSearchQuery] = useState("");
@@ -411,6 +531,97 @@ export default function App() {
 
   const handleDragCancel = () => {
     setActiveDragTaskId(null);
+  };
+
+  const syncToGoogleCalendar = async () => {
+    if (!user) return;
+    try {
+      const provider = new GoogleAuthProvider();
+      provider.addScope('https://www.googleapis.com/auth/calendar.events');
+      
+      const result = await signInWithPopup(auth, provider);
+      const credential = GoogleAuthProvider.credentialFromResult(result);
+      const token = credential?.accessToken;
+      
+      if (!token) {
+        showToast(language === 'ja' ? 'Googleカレンダーの認証に失敗しました' : 'Failed to authorize Google Calendar');
+        return;
+      }
+      
+      showToast(language === 'ja' ? '同期中です...' : 'Syncing...');
+      
+      const activeEvents = submissions.filter(s => !s.isDeleted && s.status !== 'completed' && (s.scheduledDate || s.deadline));
+      
+      let syncedCount = 0;
+      for (const event of activeEvents) {
+        let dateObj;
+        if (event.scheduledDate) {
+          dateObj = event.scheduledDate instanceof Date ? event.scheduledDate : event.scheduledDate.toDate();
+        } else if (event.deadline) {
+          dateObj = event.deadline instanceof Date ? event.deadline : event.deadline.toDate();
+        } else {
+          continue;
+        }
+          
+        const yyyy = dateObj.getFullYear();
+        const mm = String(dateObj.getMonth() + 1).padStart(2, '0');
+        const dd = String(dateObj.getDate()).padStart(2, '0');
+        const dateStr = `${yyyy}-${mm}-${dd}`;
+        
+        const calendarEvent = {
+          summary: `${event.title} [${event.subject}]`,
+          description: event.description || '',
+          start: {
+            date: dateStr,
+          },
+          end: {
+            date: dateStr,
+          },
+          extendedProperties: {
+            private: {
+              appEventId: event.id
+            }
+          }
+        };
+        
+        // Check if event already exists
+        const searchRes = await fetch(`https://www.googleapis.com/calendar/v3/calendars/primary/events?privateExtendedProperty=appEventId=${event.id}`, {
+          headers: { 'Authorization': `Bearer ${token}` }
+        });
+        
+        if (searchRes.ok) {
+          const searchData = await searchRes.json();
+          if (searchData.items && searchData.items.length > 0) {
+            // Update existing
+            const existingEventId = searchData.items[0].id;
+            await fetch(`https://www.googleapis.com/calendar/v3/calendars/primary/events/${existingEventId}`, {
+              method: 'PUT',
+              headers: { 
+                'Authorization': `Bearer ${token}`,
+                'Content-Type': 'application/json'
+              },
+              body: JSON.stringify(calendarEvent)
+            });
+          } else {
+            // Create new
+            await fetch(`https://www.googleapis.com/calendar/v3/calendars/primary/events`, {
+              method: 'POST',
+              headers: { 
+                'Authorization': `Bearer ${token}`,
+                'Content-Type': 'application/json'
+              },
+              body: JSON.stringify(calendarEvent)
+            });
+          }
+          syncedCount++;
+        }
+      }
+      
+      showToast(language === 'ja' ? `${syncedCount}件の予定を同期しました` : `Synced ${syncedCount} events`);
+    } catch (e) {
+      console.error(e);
+      showToast(language === 'ja' ? '同期エラーが発生しました' : 'Sync error occurred');
+    }
   };
 
   const handleAddEvent = async () => {
@@ -1431,6 +1642,52 @@ export default function App() {
       .slice(0, 3);
   }, [submissions]);
 
+  const renderWelcomeModal = () => (
+    <AnimatePresence>
+      {showWelcomeModal && (
+        <motion.div 
+          initial={{ opacity: 0 }}
+          animate={{ opacity: 1 }}
+          exit={{ opacity: 0 }}
+          className="fixed inset-0 z-[500] flex items-center justify-center p-4 sm:p-6 bg-black/60 backdrop-blur-md"
+        >
+          <motion.div 
+            initial={{ scale: 0.9, opacity: 0, y: 20 }}
+            animate={{ scale: 1, opacity: 1, y: 0 }}
+            exit={{ scale: 0.9, opacity: 0, y: 20 }}
+            className="m3-card !bg-[var(--m3-surface-container-high)] w-full max-w-lg flex flex-col shadow-2xl relative overflow-hidden"
+          >
+            <div className="p-6 sm:p-8 space-y-6">
+              <div className="w-16 h-16 bg-[var(--m3-primary-container)] rounded-[20px] flex items-center justify-center text-[var(--m3-on-primary-container)] rotate-3">
+                <BookOpen className="w-8 h-8" />
+              </div>
+              
+              <div>
+                <h2 className="text-2xl font-black text-[var(--m3-on-surface)] mb-2">
+                  {language === 'ja' ? 'ようこそ！' : 'Welcome!'}
+                </h2>
+                <p className="text-[var(--m3-on-surface-variant)] leading-relaxed">
+                  {language === 'ja' 
+                    ? 'このアプリでは、タスクや予定を美しく一元管理できます。進捗の管理、Googleカレンダーとの同期、タイマーによる集中機能などをご利用いただけます。まずは右下の「追加」ボタンから新しいタスクを作成してみましょう！' 
+                    : 'Manage your tasks and events beautifully. You can track progress, sync with Google Calendar, and stay focused with built-in timers. Start by adding a new task using the "+" button!'}
+                </p>
+              </div>
+
+              <div className="pt-4 flex justify-end">
+                <button 
+                  onClick={handleCloseWelcomeModal}
+                  className="m3-button-primary px-8"
+                >
+                  {language === 'ja' ? '始める' : 'Get Started'}
+                </button>
+              </div>
+            </div>
+          </motion.div>
+        </motion.div>
+      )}
+    </AnimatePresence>
+  );
+
   const renderTermsModal = () => (
     <AnimatePresence>
       {showTermsModal && (
@@ -1444,10 +1701,10 @@ export default function App() {
             initial={{ scale: 0.9, opacity: 0, y: 20 }}
             animate={{ scale: 1, opacity: 1, y: 0 }}
             exit={{ scale: 0.9, opacity: 0, y: 20 }}
-            className="m3-card !bg-white w-full max-w-2xl max-h-[85vh] flex flex-col shadow-2xl relative overflow-hidden text-slate-900"
+            className="m3-card !bg-[var(--m3-surface-container-high)] w-full max-w-2xl max-h-[85vh] flex flex-col shadow-2xl relative overflow-hidden text-[var(--m3-on-surface)]"
           >
-            <div className="p-4 sm:p-5 border-b border-slate-200 shrink-0 bg-slate-50">
-              <h2 className="text-lg font-black text-slate-900 flex items-center gap-3">
+            <div className="p-4 sm:p-5 border-b border-[var(--m3-outline-variant)]/20 shrink-0 bg-[var(--m3-surface-container-highest)]">
+              <h2 className="text-lg font-black text-[var(--m3-on-surface)] flex items-center gap-3">
                 <CheckSquare className="w-5 h-5 text-[var(--m3-primary)]" />
                 {language === 'ja' ? '利用規約' : 'Terms of Service'}
               </h2>
@@ -1460,22 +1717,22 @@ export default function App() {
                   setHasScrolledToBottom(true);
                 }
               }}
-              className="flex-1 overflow-y-auto p-5 sm:p-8 scrollbar-custom space-y-6 text-slate-800"
+              className="flex-1 overflow-y-auto p-5 sm:p-8 scrollbar-custom space-y-6 text-[var(--m3-on-surface-variant)]"
             >
               <div className="space-y-4">
-                <h3 className="text-lg font-black text-slate-900">{TERMS_OF_SERVICE[language].title}</h3>
-                <p className="text-sm font-semibold leading-relaxed whitespace-pre-wrap text-slate-700">
+                <h3 className="text-lg font-black text-[var(--m3-on-surface)]">{TERMS_OF_SERVICE[language].title}</h3>
+                <p className="text-sm font-semibold leading-relaxed whitespace-pre-wrap text-[var(--m3-on-surface-variant)]">
                   {TERMS_OF_SERVICE[language].intro}
                 </p>
               </div>
 
               <div className="space-y-4">
-                <h3 className="text-base font-black flex items-center gap-2 text-slate-900">
+                <h3 className="text-base font-black flex items-center gap-2 text-[var(--m3-on-surface)]">
                    {TERMS_OF_SERVICE[language].features.title}
                 </h3>
                 <ul className="space-y-3">
                   {TERMS_OF_SERVICE[language].features.items.map((item, idx) => (
-                    <li key={idx} className="flex gap-3 text-sm font-bold text-slate-700">
+                    <li key={idx} className="flex gap-3 text-sm font-bold text-[var(--m3-on-surface-variant)]">
                       <div className="mt-1.5 w-1.5 h-1.5 rounded-full bg-[var(--m3-primary)] shrink-0" />
                       {item}
                     </li>
@@ -1483,28 +1740,28 @@ export default function App() {
                 </ul>
               </div>
 
-              <div className="space-y-6 pt-6 border-t border-slate-100">
-                <h3 className="text-lg font-black text-slate-900">{TERMS_OF_SERVICE[language].terms.title}</h3>
-                <p className="text-xs font-bold text-slate-500 italic">{TERMS_OF_SERVICE[language].terms.intro}</p>
+              <div className="space-y-6 pt-6 border-t border-[var(--m3-outline-variant)]/20">
+                <h3 className="text-lg font-black text-[var(--m3-on-surface)]">{TERMS_OF_SERVICE[language].terms.title}</h3>
+                <p className="text-xs font-bold text-[var(--m3-on-surface-variant)] opacity-60 italic">{TERMS_OF_SERVICE[language].terms.intro}</p>
                 
                 {TERMS_OF_SERVICE[language].terms.sections.map((section, idx) => (
                   <div key={idx} className="space-y-2">
                     <h4 className="text-sm font-black text-[var(--m3-primary)]">{section.title}</h4>
-                    <p className="text-sm font-semibold leading-relaxed text-slate-700 whitespace-pre-wrap">
+                    <p className="text-sm font-semibold leading-relaxed text-[var(--m3-on-surface-variant)] whitespace-pre-wrap">
                       {section.content}
                     </p>
                   </div>
                 ))}
               </div>
 
-              <div className="p-4 rounded-2xl bg-slate-50 border border-slate-200">
+              <div className="p-4 rounded-2xl bg-[var(--m3-surface-container-highest)] border border-[var(--m3-outline-variant)]/20">
                 <p className="text-xs font-black leading-relaxed text-[var(--m3-primary)] text-center">
                   {TERMS_OF_SERVICE[language].terms.footer}
                 </p>
               </div>
             </div>
 
-            <div className="p-4 sm:p-6 bg-slate-50 border-t border-slate-200 space-y-3 shrink-0">
+            <div className="p-4 sm:p-6 bg-[var(--m3-surface-container-highest)] border-t border-[var(--m3-outline-variant)]/20 space-y-3 shrink-0">
               {user ? (
                 <div className="flex justify-end gap-3">
                   <button 
@@ -1529,11 +1786,11 @@ export default function App() {
                     >
                       <div className={cn(
                         "w-6 h-6 rounded-lg border-2 flex items-center justify-center transition-all",
-                        tempAccepted ? "bg-[var(--m3-primary)] border-[var(--m3-primary)]" : "border-slate-300"
+                        tempAccepted ? "bg-[var(--m3-primary)] border-[var(--m3-primary)]" : "border-[var(--m3-outline-variant)]"
                       )}>
                         {tempAccepted && <X className="w-4 h-4 text-white" />}
                       </div>
-                      <span className="text-sm font-black uppercase tracking-wider text-slate-700">
+                      <span className="text-sm font-black uppercase tracking-wider text-[var(--m3-on-surface-variant)]">
                         {language === 'ja' ? '規約に同意する' : 'I agree to the terms'}
                       </span>
                     </button>
@@ -1545,7 +1802,7 @@ export default function App() {
                           setTempAccepted(false);
                           setHasScrolledToBottom(false);
                         }}
-                        className="flex-1 px-6 py-4 rounded-2xl bg-slate-200 text-slate-600 font-black uppercase tracking-widest text-xs hover:bg-slate-300 transition-all"
+                        className="flex-1 px-6 py-4 rounded-2xl bg-[var(--m3-surface-container-high)] text-[var(--m3-on-surface-variant)] font-black uppercase tracking-widest text-xs hover:bg-[var(--m3-surface-container-highest)] transition-all"
                       >
                         {t.cancel || 'キャンセル'}
                       </button>
@@ -1583,11 +1840,11 @@ export default function App() {
 
   if (!isAuthReady) {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-slate-50">
+      <div className="min-h-screen flex items-center justify-center bg-[var(--m3-surface)]">
         <motion.div 
           animate={{ rotate: 360 }}
           transition={{ duration: 1, repeat: Infinity, ease: "linear" }}
-          className="w-8 h-8 border-4 border-ios-blue border-t-transparent rounded-full"
+          className="w-8 h-8 border-4 border-[var(--m3-primary)] border-t-transparent rounded-full"
         />
       </div>
     );
@@ -1599,7 +1856,7 @@ export default function App() {
         <motion.div 
           initial={{ opacity: 0, scale: 0.9 }}
           animate={{ opacity: 1, scale: 1 }}
-          className="max-w-md w-full m3-card text-center shadow-2xl overflow-hidden"
+          className="max-w-md w-full m3-card text-center shadow-lg overflow-hidden"
         >
           <div className="p-10">
             <div className="w-20 h-20 bg-[var(--m3-primary-container)] rounded-[24px] flex items-center justify-center mx-auto mb-8 text-[var(--m3-on-primary-container)] rotate-3">
@@ -1742,102 +1999,8 @@ export default function App() {
   return (
     <div className="relative min-h-screen w-full overflow-hidden bg-[var(--m3-surface)] text-[var(--m3-on-surface)]">
       {/* Theme Background Watermarks */}
-      {theme === 'dog' && (
-        <>
-          <div className="fixed inset-0 pointer-events-none z-0 overflow-hidden opacity-[0.06] text-[var(--m3-primary)] mix-blend-multiply flex items-center justify-center">
-            <motion.div
-              animate={{ rotate: [-2, 2, -2], x: [-10, 10, -10] }}
-              transition={{ duration: 15, repeat: Infinity, ease: "linear" }}
-            >
-              <Dog className="w-[120vw] h-[120vh] -rotate-12 translate-x-1/4 translate-y-1/4 stroke-[0.3]" />
-            </motion.div>
-          </div>
-          <motion.div 
-            animate={{ y: [0, -15, 0], rotate: [12, 15, 12] }}
-            transition={{ duration: 6, repeat: Infinity, ease: "easeInOut" }}
-            className="fixed top-20 right-[10%] opacity-[0.08] pointer-events-none z-0 scale-150"
-          >
-            <Dog className="w-40 h-40" />
-          </motion.div>
-          <motion.div 
-            animate={{ x: [0, 10, 0], rotate: [-45, -40, -45] }}
-            transition={{ duration: 8, repeat: Infinity, ease: "easeInOut" }}
-            className="fixed bottom-40 left-[5%] opacity-[0.08] pointer-events-none z-0"
-          >
-            <PawPrint className="w-32 h-32" />
-          </motion.div>
-        </>
-      )}
-      {theme === 'cat' && (
-        <>
-          <div className="fixed inset-0 pointer-events-none z-0 overflow-hidden opacity-[0.06] text-[var(--m3-primary)] mix-blend-multiply flex items-center justify-center">
-            <motion.div
-              animate={{ rotate: [2, -2, 2], y: [-10, 10, -10] }}
-              transition={{ duration: 20, repeat: Infinity, ease: "linear" }}
-            >
-              <Cat className="w-[120vw] h-[120vh] rotate-12 translate-x-1/4 translate-y-1/4 stroke-[0.3]" />
-            </motion.div>
-          </div>
-          <motion.div 
-            animate={{ scale: [1, 1.1, 1], rotate: [-12, -15, -12] }}
-            transition={{ duration: 7, repeat: Infinity, ease: "easeInOut" }}
-            className="fixed top-40 left-[15%] opacity-[0.08] pointer-events-none z-0"
-          >
-            <Cat className="w-48 h-48" />
-          </motion.div>
-          <motion.div 
-            animate={{ y: [0, -20, 0], rotate: [45, 50, 45] }}
-            transition={{ duration: 10, repeat: Infinity, ease: "easeInOut" }}
-            className="fixed bottom-20 right-[8%] opacity-[0.08] pointer-events-none z-0"
-          >
-            <PawPrint className="w-24 h-24" />
-          </motion.div>
-        </>
-      )}
-      {theme === 'animal' && (
-        <>
-          <div className="fixed inset-0 pointer-events-none z-0 overflow-hidden opacity-[0.06] text-[var(--m3-primary)] mix-blend-multiply flex items-center justify-center">
-            <motion.div
-              animate={{ x: [-20, 20, -20] }}
-              transition={{ duration: 25, repeat: Infinity, ease: "linear" }}
-            >
-              <Rabbit className="w-[120vw] h-[120vh] -rotate-12 translate-x-1/4 translate-y-1/4 stroke-[0.3]" />
-            </motion.div>
-          </div>
-          <motion.div 
-            animate={{ y: [0, -10, 0] }}
-            transition={{ duration: 4, repeat: Infinity, ease: "easeInOut" }}
-            className="fixed top-1/4 right-[5%] opacity-[0.08] pointer-events-none z-0 rotate-12"
-          >
-            <Rabbit className="w-56 h-56" />
-          </motion.div>
-          <motion.div 
-            animate={{ scale: [1, 1.2, 1] }}
-            transition={{ duration: 12, repeat: Infinity, ease: "linear" }}
-            className="fixed bottom-1/4 left-[10%] opacity-[0.08] pointer-events-none z-0 -rotate-12"
-          >
-            <Bird className="w-32 h-32" />
-          </motion.div>
-        </>
-      )}
-      {theme === 'flower' && (
-        <>
-          <div className="fixed inset-0 pointer-events-none z-0 overflow-hidden opacity-[0.15] mix-blend-multiply">
-            {/* Scattered colorful flowers based on user image */}
-            <motion.div animate={{ y: [0, -15, 0], rotate: [0, 10, 0] }} transition={{ duration: 8, repeat: Infinity }} className="absolute top-[5%] left-[10%] text-pink-500"><Flower className="w-24 h-24" /></motion.div>
-            <motion.div animate={{ y: [0, 20, 0], rotate: [0, -15, 0] }} transition={{ duration: 12, repeat: Infinity }} className="absolute top-[15%] left-[40%] text-orange-400"><Flower2 className="w-16 h-16" /></motion.div>
-            <motion.div animate={{ scale: [1, 1.1, 1], rotate: [0, 5, 0] }} transition={{ duration: 10, repeat: Infinity }} className="absolute top-[8%] left-[75%] text-yellow-500"><Flower className="w-32 h-32" /></motion.div>
-            
-            <motion.div animate={{ x: [-10, 10, -10], rotate: [12, 15, 12] }} transition={{ duration: 15, repeat: Infinity }} className="absolute top-[45%] left-[5%] text-blue-400"><Flower2 className="w-20 h-20" /></motion.div>
-            <motion.div animate={{ rotate: 360 }} transition={{ duration: 40, repeat: Infinity, ease: "linear" }} className="absolute top-[50%] left-[50%] -translate-x-1/2 -translate-y-1/2 text-red-500 opacity-20"><Flower className="w-[40vw] h-[40vw] stroke-[0.5]" /></motion.div>
-            <motion.div animate={{ scale: [0.9, 1.05, 0.9], rotate: [-10, -5, -10] }} transition={{ duration: 14, repeat: Infinity }} className="absolute top-[40%] left-[85%] text-purple-400"><Flower className="w-28 h-28" /></motion.div>
-            
-            <motion.div animate={{ y: [0, 30, 0], x: [0, 10, 0] }} transition={{ duration: 11, repeat: Infinity }} className="absolute bottom-[15%] left-[15%] text-red-400"><Flower className="w-20 h-20" /></motion.div>
-            <motion.div animate={{ rotate: -360 }} transition={{ duration: 50, repeat: Infinity, ease: "linear" }} className="absolute bottom-[10%] left-[45%] text-green-400"><Flower2 className="w-16 h-16" /></motion.div>
-            <motion.div animate={{ y: [0, -20, 0], scale: [1, 1.2, 1] }} transition={{ duration: 9, repeat: Infinity }} className="absolute bottom-[20%] left-[80%] text-pink-400"><Flower2 className="w-24 h-24" /></motion.div>
-          </div>
-        </>
-      )}
+      <ThemeBackground theme={theme} />
+
 
       {/* Update Notification Modal */}
       <AnimatePresence>
@@ -1852,7 +2015,7 @@ export default function App() {
               initial={{ scale: 0.9, opacity: 0, y: 20 }}
               animate={{ scale: 1, opacity: 1, y: 0 }}
               exit={{ scale: 0.9, opacity: 0, y: 20 }}
-              className="bg-[var(--m3-surface-container-high)] w-full max-w-sm rounded-[32px] p-8 shadow-2xl relative border border-[var(--m3-outline)]/10"
+              className="bg-[var(--m3-surface-container-high)] w-full max-w-sm rounded-[32px] p-8 shadow-xl relative border border-[var(--m3-outline)]/10"
             >
               <div className="space-y-6 text-center">
                 <div className="w-16 h-16 rounded-full bg-[var(--m3-primary)]/10 flex items-center justify-center mx-auto">
@@ -1884,7 +2047,7 @@ export default function App() {
 
                 <button 
                   onClick={closeUpdateNotice}
-                  className="w-full py-4 rounded-2xl bg-[var(--m3-primary)] text-[var(--m3-on-primary)] font-black text-sm transition-all hover:bg-[var(--m3-primary)]/90 shadow-lg shadow-[var(--m3-primary)]/20 active:scale-[0.98]"
+                  className="w-full py-4 rounded-2xl bg-[var(--m3-primary)] text-[var(--m3-on-primary)] font-black text-sm transition-all hover:bg-[var(--m3-primary)]/90 shadow-md shadow-[var(--m3-primary)]/10 active:scale-[0.98]"
                 >
                   {language === 'ja' ? '確認しました' : 'Got it!'}
                 </button>
@@ -1911,7 +2074,7 @@ export default function App() {
               <Menu className="w-5 h-5 sm:w-6 sm:h-6" />
             </button>
 
-            <div className="w-10 h-10 sm:w-12 sm:h-12 rounded-2xl bg-[var(--m3-primary)] flex shrink-0 items-center justify-center text-[var(--m3-on-primary)] shadow-lg shadow-[var(--m3-primary)]/20 overflow-hidden relative">
+            <div className="w-10 h-10 sm:w-12 sm:h-12 rounded-2xl bg-[var(--m3-primary)] flex shrink-0 items-center justify-center text-[var(--m3-on-primary)] shadow-md shadow-[var(--m3-primary)]/10 overflow-hidden relative">
               {theme === 'dog' ? <Dog className="w-6 h-6 sm:w-7 sm:h-7" /> :
                theme === 'cat' ? <Cat className="w-6 h-6 sm:w-7 sm:h-7" /> :
                theme === 'animal' ? <Rabbit className="w-6 h-6 sm:w-7 sm:h-7" /> :
@@ -1919,7 +2082,7 @@ export default function App() {
                <Zap className="w-6 h-6 sm:w-7 sm:h-7" />}
                <motion.div 
                  animate={{ rotate: 360 }} 
-                 transition={{ duration: 8, repeat: Infinity, ease: "linear" }}
+                 transition={{ duration: 24, repeat: Infinity, ease: "linear" }}
                  className="absolute inset-0 opacity-10"
                >
                  <PawPrint className="w-full h-full p-2" />
@@ -1981,7 +2144,7 @@ export default function App() {
           </aside>
 
           {/* Main Content */}
-      <main className="flex-1 overflow-y-auto pb-24 lg:pb-20 px-4 lg:px-0 lg:pr-2">
+      <main className="flex-1 overflow-y-auto pb-24 lg:pb-20 px-4 lg:px-8">
         {/* Search and Sort Logic */}
         <div className="mb-6 space-y-4">
           <div className="flex flex-col md:flex-row gap-4">
@@ -2330,7 +2493,7 @@ export default function App() {
           transition={{ type: 'spring', damping: 25, stiffness: 200 }}
           className="fixed inset-0 w-full h-full bg-[var(--m3-surface)] z-[160] flex flex-col overflow-hidden"
         >
-          <DndContext sensors={sensors} collisionDetection={closestCenter} onDragStart={handleDragStart} onDragEnd={handleCalendarDragEnd} onDragCancel={handleDragCancel}>
+          <DndContext sensors={sensors} collisionDetection={pointerWithin} onDragStart={handleDragStart} onDragEnd={handleCalendarDragEnd} onDragCancel={handleDragCancel}>
             <div className="p-4 sm:px-8 py-4 flex items-center justify-between border-b border-[var(--m3-outline-variant)]/40 shrink-0 bg-[var(--m3-surface)] z-10">
             <div className="flex items-center gap-4">
               <div className="w-10 h-10 sm:w-12 sm:h-12 rounded-[20px] bg-[var(--m3-primary-container)] flex items-center justify-center text-[var(--m3-on-primary-container)] shadow-sm">
@@ -2346,6 +2509,12 @@ export default function App() {
               </div>
             </div>
             <div className="flex items-center gap-3">
+              <button
+                onClick={syncToGoogleCalendar}
+                className="hidden sm:flex px-4 py-2 bg-[var(--m3-primary-container)] hover:bg-[var(--m3-primary-container)]/80 text-[var(--m3-on-primary-container)] rounded-2xl text-xs font-black tracking-widest transition-all active:scale-95 shadow-sm"
+              >
+                {language === 'ja' ? 'Googleに同期' : 'Sync to Google'}
+              </button>
               <button
                 onClick={() => setSelectedDate(new Date())}
                 className="hidden sm:flex px-4 py-2 bg-[var(--m3-secondary-container)] hover:bg-[var(--m3-secondary-container)]/80 text-[var(--m3-on-secondary-container)] rounded-2xl text-xs font-black uppercase tracking-widest transition-all active:scale-95 shadow-sm"
@@ -2364,6 +2533,22 @@ export default function App() {
           <div className="flex-1 overflow-hidden flex flex-col lg:flex-row h-full">
             {/* Left Column: Calendar Grid */}
             <div className="flex-1 overflow-y-auto p-4 sm:p-6 lg:p-8 space-y-6 lg:border-r border-[var(--m3-outline-variant)]/30 custom-scrollbar">
+              
+              {/* Google Calendar Sync Info */}
+              <div className="bg-[var(--m3-secondary-container)]/50 text-[var(--m3-on-secondary-container)] p-3 rounded-2xl text-xs flex flex-col sm:flex-row items-start sm:items-center gap-2 sm:gap-3 border border-[var(--m3-outline-variant)]/20 shadow-sm">
+                <div className="bg-[var(--m3-secondary-container)] text-[var(--m3-on-secondary-container)] p-1.5 rounded-full shrink-0">
+                  <AlertCircle className="w-4 h-4 sm:w-5 sm:h-5" />
+                </div>
+                <div className="flex-1 leading-relaxed">
+                  <span className="font-bold mr-2 hidden sm:inline">
+                    {language === 'ja' ? 'Googleカレンダー同期:' : 'Google Calendar Sync:'}
+                  </span>
+                  {language === 'ja' 
+                    ? '右上のボタンから予定をGoogleカレンダーに追加できます。Firebase (Google Cloud) コンソールで「Google Calendar API」が有効になっている必要があります。認証ポップアップがブロックされる場合は別タブで開いてください。' 
+                    : 'You can sync events to Google Calendar. Ensure the "Google Calendar API" is enabled in your Google Cloud Console. If the popup is blocked, please open the preview in a new tab.'}
+                </div>
+              </div>
+
               {/* View Switcher/Navigation Header */}
               <div className="flex flex-col sm:flex-row items-center gap-4 bg-[var(--m3-surface-container-low)] p-3 rounded-3xl border border-[var(--m3-outline-variant)]/20 shadow-sm">
                 <div className="flex p-1 bg-[var(--m3-surface-container-high)] rounded-[18px] border border-[var(--m3-outline-variant)]/20 shadow-inner w-full sm:w-auto">
@@ -2887,7 +3072,7 @@ export default function App() {
                               <button
                                 onClick={handleAddEvent}
                                 disabled={!newEventTitle.trim()}
-                                className="px-6 py-2 rounded-xl bg-[var(--m3-primary)] text-[var(--m3-on-primary)] text-[11px] font-black uppercase tracking-widest shadow-lg shadow-[var(--m3-primary)]/20 disabled:opacity-30 disabled:grayscale transition-all active:scale-95"
+                                className="px-6 py-2 rounded-xl bg-[var(--m3-primary)] text-[var(--m3-on-primary)] text-[11px] font-black uppercase tracking-widest shadow-md shadow-[var(--m3-primary)]/10 disabled:opacity-30 disabled:grayscale transition-all active:scale-95"
                               >
                                 {language === 'ja' ? '作成' : 'Create'}
                               </button>
@@ -3027,7 +3212,7 @@ export default function App() {
               const task = submissions.find(s => `task-${s.id}` === activeDragTaskId);
               if (!task) return null;
               return (
-                <div className="group p-4 rounded-[32px] bg-[var(--m3-surface-container-highest)] border-2 border-[var(--m3-primary)]/40 shadow-[0_20px_50px_rgba(0,0,0,0.3)] flex items-center gap-4 rotate-2 scale-105 cursor-grabbing z-[210] opacity-95 backdrop-blur-md ring-8 ring-[var(--m3-primary)]/5">
+                <div className="group p-4 rounded-[32px] bg-[var(--m3-surface-container-highest)] border-2 border-[var(--m3-primary)]/40 shadow-[0_20px_50px_rgba(0,0,0,0.3)] flex items-center gap-4 scale-105 cursor-grabbing z-[210] opacity-95 backdrop-blur-md ring-8 ring-[var(--m3-primary)]/5">
                   <div className="w-10 h-10 rounded-2xl flex items-center justify-center shrink-0 shadow-sm bg-[var(--m3-primary)] text-[var(--m3-on-primary)] transition-transform group-active:rotate-12">
                     <BookOpen className="w-5 h-5" />
                   </div>
@@ -3513,7 +3698,7 @@ export default function App() {
             setAddTaskType('percentage');
             setIsAdding(true);
           }}
-          className="fixed bottom-6 right-6 sm:bottom-10 sm:right-10 w-14 h-14 sm:w-20 sm:h-20 bg-[#cdddf7] text-[#005696] rounded-full shadow-lg shadow-[#cdddf7]/50 flex items-center justify-center z-[170] group hover:opacity-90 transition-all active:scale-95"
+          className="fixed bottom-6 right-6 sm:bottom-10 sm:right-10 w-14 h-14 sm:w-20 sm:h-20 bg-[var(--m3-primary-container)] text-[var(--m3-on-primary-container)] rounded-full shadow-lg shadow-[var(--m3-primary)]/10 flex items-center justify-center z-[170] group hover:brightness-110 hover:shadow-xl hover:shadow-[var(--m3-primary)]/20 transition-all active:scale-95"
         >
           <Plus className="w-8 h-8 sm:w-10 sm:h-10 transition-transform duration-300 group-hover:rotate-90" />
         </motion.button>
@@ -4306,7 +4491,7 @@ export default function App() {
             exit={{ opacity: 0, y: 20, scale: 0.9 }}
             className="fixed bottom-24 left-1/2 -translate-x-1/2 z-[200] pointer-events-none"
           >
-            <div className="bg-[var(--m3-primary)] text-[var(--m3-on-primary)] px-8 py-4 rounded-3xl shadow-2xl flex items-center gap-3 font-black text-sm tracking-widest uppercase">
+            <div className="bg-[var(--m3-primary)] text-[var(--m3-on-primary)] px-8 py-4 rounded-3xl shadow-xl flex items-center gap-3 font-black text-sm tracking-widest uppercase">
               <CheckCircle2 className="w-6 h-6" />
               {toastMessage}
             </div>
@@ -4418,6 +4603,7 @@ export default function App() {
       </AnimatePresence>
 
       {renderTermsModal()}
+      {renderWelcomeModal()}
 
       <AnimatePresence>
         {isMobileMenuOpen && (
@@ -4501,21 +4687,21 @@ export default function App() {
               initial={{ scale: 0.9, opacity: 0, y: 20 }}
               animate={{ scale: 1, opacity: 1, y: 0 }}
               exit={{ scale: 0.9, opacity: 0, y: 20 }}
-              className="m3-card !bg-white w-full max-w-2xl max-h-[85vh] flex flex-col shadow-2xl relative overflow-hidden text-slate-900"
+              className="m3-card !bg-[var(--m3-surface-container-high)] w-full max-w-2xl max-h-[85vh] flex flex-col shadow-2xl relative overflow-hidden text-[var(--m3-on-surface)]"
             >
-              <div className="p-4 sm:p-5 border-b border-slate-200 shrink-0 bg-slate-50 flex justify-between items-center">
-                <h2 className="text-lg font-black text-slate-900 flex items-center gap-3">
+              <div className="p-4 sm:p-5 border-b border-[var(--m3-outline-variant)]/20 shrink-0 bg-[var(--m3-surface-container-highest)] flex justify-between items-center">
+                <h2 className="text-lg font-black text-[var(--m3-on-surface)] flex items-center gap-3">
                   <Zap className="w-5 h-5 text-[var(--m3-primary)]" />
                   {RELEASE_NOTES.title}
                 </h2>
-                <div className="text-xs font-bold bg-slate-200 text-slate-600 px-2.5 py-1 rounded-md">
+                <div className="text-xs font-bold bg-[var(--m3-surface-container-high)] text-[var(--m3-on-surface-variant)] px-2.5 py-1 rounded-md">
                    v{RELEASE_NOTES.version}
                 </div>
               </div>
               
-              <div className="flex-1 overflow-y-auto p-5 sm:p-8 scrollbar-custom space-y-6 text-slate-800">
+              <div className="flex-1 overflow-y-auto p-5 sm:p-8 scrollbar-custom space-y-6 text-[var(--m3-on-surface-variant)]">
                 <div className="space-y-4">
-                  <h3 className="text-base font-black flex items-center gap-2 text-slate-900">
+                  <h3 className="text-base font-black flex items-center gap-2 text-[var(--m3-on-surface)]">
                     {RELEASE_NOTES.features.title}
                   </h3>
                   <ul className="space-y-3">
@@ -4607,9 +4793,9 @@ function SubmissionCard({
         onClick={onClick}
         whileTap={{ scale: 0.99 }}
         className={cn(
-          "group relative bg-[var(--m3-surface-container)] rounded-[20px] p-5 flex items-center gap-4 border cursor-pointer transition-colors",
+          "group relative bg-[var(--m3-surface-container)] rounded-[20px] p-5 flex items-center gap-4 border cursor-pointer transition-all overflow-visible",
           isSelected ? "border-[var(--m3-primary)] bg-[var(--m3-primary-container)]/10" : "border-[var(--m3-outline)]/10 hover:border-[var(--m3-primary)]/30",
-          isHighlighted && "ring-2 ring-[var(--m3-primary)] shadow-lg shadow-[var(--m3-primary)]/20"
+          isHighlighted && "z-20 ring-2 ring-[var(--m3-primary)] shadow-md shadow-[var(--m3-primary)]/15 scale-[1.01]"
         )}
       >
         {isHistoryView && isSelectionMode && onToggleSelect && (
@@ -4633,12 +4819,12 @@ function SubmissionCard({
             <motion.span 
               layoutId={`subject-${submission.id}`} 
               transition={{ duration: 0.25, ease: "easeOut" }}
-              className="text-xs font-black text-[var(--m3-primary)] uppercase tracking-wider"
+              className="text-xs font-black text-[var(--m3-primary)] uppercase tracking-wider whitespace-nowrap truncate max-w-[120px]"
             >
               {submission.subject}
             </motion.span>
-            <span className="text-xs text-[var(--m3-outline)]">•</span>
-            <span className="text-xs font-medium text-[var(--m3-on-surface-variant)]">
+            <span className="text-xs text-[var(--m3-outline)] shrink-0">•</span>
+            <span className="text-xs font-medium text-[var(--m3-on-surface-variant)] shrink-0">
               {format(((submission.deletedAt || submission.completedAt) as any)?.toDate() || new Date(), 'yyyy/MM/dd HH:mm')}
             </span>
           </div>
@@ -4671,11 +4857,11 @@ function SubmissionCard({
       whileTap={{ scale: 0.98 }}
       whileHover={{ y: -4 }}
       className={cn(
-        "group relative cursor-pointer bg-[var(--m3-surface-container)] flex flex-col justify-between overflow-visible transition-[box-shadow,border-color,background-color] duration-300",
+        "group relative cursor-pointer bg-[var(--m3-surface-container)] flex flex-col justify-between overflow-visible transition-[box-shadow,border-color,background-color,transform] duration-300",
         "h-full min-h-[180px] rounded-[24px] p-5 sm:p-6",
-        "border border-white/10 dark:border-white/5 hover:border-[var(--m3-primary)]/40 hover:shadow-xl hover:shadow-[var(--m3-primary)]/10",
+        "border border-white/10 dark:border-white/5 hover:border-[var(--m3-primary)]/40 hover:shadow-lg",
         submission.priority === 'high' && submission.status !== 'completed' && "border-[var(--m3-error)]/30 ring-1 ring-[var(--m3-error)]/20 bg-gradient-to-br from-[var(--m3-surface-container)] to-[var(--m3-error)]/10",
-        isHighlighted && "ring-2 ring-[var(--m3-primary)] shadow-lg shadow-[var(--m3-primary)]/20",
+        isHighlighted && "z-30 ring-4 ring-[var(--m3-primary)]/30 border-[var(--m3-primary)] shadow-xl shadow-[var(--m3-primary)]/20 scale-[1.01]",
         theme === 'dog' && "hover:border-[#8b5a2b]/30",
         theme === 'cat' && "hover:border-[#c26978]/30",
         theme === 'animal' && "hover:border-[#b16300]/30",
@@ -4709,7 +4895,7 @@ function SubmissionCard({
         <div className="flex items-center justify-between gap-1 mb-1">
           <motion.span 
             layoutId={`subject-${submission.id}`} 
-            className="text-[10px] font-black uppercase tracking-wider text-[var(--m3-primary)]"
+            className="text-[10px] font-black uppercase tracking-wider text-[var(--m3-primary)] whitespace-nowrap truncate"
           >
             {submission.subject}
           </motion.span>
