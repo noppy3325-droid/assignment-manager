@@ -33,7 +33,6 @@ import * as holiday_jp from '@holiday-jp/holiday_jp';
 import { cn } from './lib/utils';
 import { translations, Language } from './translations';
 
-import { GoogleAuthProvider } from 'firebase/auth';
 import { 
   auth, 
   db, 
@@ -137,16 +136,20 @@ const DEFAULT_SUBJECTS = [
   "世界史", "日本史", "地理", "現代社会", "倫理", "政治・経済", "情報", "その他"
 ];
 
-const APP_VERSION = '1.3.4';
+const APP_VERSION = '1.3.2';
 
 const RELEASE_NOTES = {
-  version: '1.3.4',
-  title: "🚀 アップデート情報 (v1.3.4)",
+  version: '1.3.2',
+  title: "🚀 アップデート情報 (v1.3.2)",
   features: {
     title: "✨ 修正・改善内容",
     items: [
-      "🗓️ Googleカレンダーへの同期機能を追加しました（詳細な案内表示も追加）",
-      "👋 初回ログインのユーザー向けに、アプリの概要と使い方のウェルカムポップアップを追加しました"
+      "検索バーをアイコン化し、クリック or /キーで展開するように改善しました（画面の圧迫感を軽減）",
+      "カレンダー表示中は、右下のメイン追加ボタンを非表示にしました（既存の追加UIと重複するため）",
+      "キーボードショートカット一覧を「設定」メニュー内に統合し、ヘッダーを整理しました",
+      "タスク選択時の表示不具合（一部が欠ける現象）を修正しました",
+      "カレンダー内の日付指定（年月日）を自由に行えるように改善しました",
+      "英語設定時のカレンダー表示不具合を修正しました"
     ]
   }
 };
@@ -423,25 +426,8 @@ export default function App() {
     return localStorage.getItem('app-last-version') !== APP_VERSION;
   });
   const [showTermsModal, setShowTermsModal] = useState(false);
-  const [showWelcomeModal, setShowWelcomeModal] = useState(false);
   const [hasScrolledToBottom, setHasScrolledToBottom] = useState(false);
   const [tempAccepted, setTempAccepted] = useState(false);
-
-  useEffect(() => {
-    if (user) {
-      const hasSeen = localStorage.getItem(`app-welcome-${user.uid}`);
-      if (!hasSeen) {
-        setShowWelcomeModal(true);
-      }
-    }
-  }, [user]);
-
-  const handleCloseWelcomeModal = () => {
-    if (user) {
-      localStorage.setItem(`app-welcome-${user.uid}`, 'true');
-    }
-    setShowWelcomeModal(false);
-  };
   const [sortCriteria, setSortCriteria] = useState<'deadline' | 'scheduled' | 'priority' | 'progress'>('scheduled');
   const [searchQuery, setSearchQuery] = useState("");
   const [debouncedSearchQuery, setDebouncedSearchQuery] = useState("");
@@ -531,97 +517,6 @@ export default function App() {
 
   const handleDragCancel = () => {
     setActiveDragTaskId(null);
-  };
-
-  const syncToGoogleCalendar = async () => {
-    if (!user) return;
-    try {
-      const provider = new GoogleAuthProvider();
-      provider.addScope('https://www.googleapis.com/auth/calendar.events');
-      
-      const result = await signInWithPopup(auth, provider);
-      const credential = GoogleAuthProvider.credentialFromResult(result);
-      const token = credential?.accessToken;
-      
-      if (!token) {
-        showToast(language === 'ja' ? 'Googleカレンダーの認証に失敗しました' : 'Failed to authorize Google Calendar');
-        return;
-      }
-      
-      showToast(language === 'ja' ? '同期中です...' : 'Syncing...');
-      
-      const activeEvents = submissions.filter(s => !s.isDeleted && s.status !== 'completed' && (s.scheduledDate || s.deadline));
-      
-      let syncedCount = 0;
-      for (const event of activeEvents) {
-        let dateObj;
-        if (event.scheduledDate) {
-          dateObj = event.scheduledDate instanceof Date ? event.scheduledDate : event.scheduledDate.toDate();
-        } else if (event.deadline) {
-          dateObj = event.deadline instanceof Date ? event.deadline : event.deadline.toDate();
-        } else {
-          continue;
-        }
-          
-        const yyyy = dateObj.getFullYear();
-        const mm = String(dateObj.getMonth() + 1).padStart(2, '0');
-        const dd = String(dateObj.getDate()).padStart(2, '0');
-        const dateStr = `${yyyy}-${mm}-${dd}`;
-        
-        const calendarEvent = {
-          summary: `${event.title} [${event.subject}]`,
-          description: event.description || '',
-          start: {
-            date: dateStr,
-          },
-          end: {
-            date: dateStr,
-          },
-          extendedProperties: {
-            private: {
-              appEventId: event.id
-            }
-          }
-        };
-        
-        // Check if event already exists
-        const searchRes = await fetch(`https://www.googleapis.com/calendar/v3/calendars/primary/events?privateExtendedProperty=appEventId=${event.id}`, {
-          headers: { 'Authorization': `Bearer ${token}` }
-        });
-        
-        if (searchRes.ok) {
-          const searchData = await searchRes.json();
-          if (searchData.items && searchData.items.length > 0) {
-            // Update existing
-            const existingEventId = searchData.items[0].id;
-            await fetch(`https://www.googleapis.com/calendar/v3/calendars/primary/events/${existingEventId}`, {
-              method: 'PUT',
-              headers: { 
-                'Authorization': `Bearer ${token}`,
-                'Content-Type': 'application/json'
-              },
-              body: JSON.stringify(calendarEvent)
-            });
-          } else {
-            // Create new
-            await fetch(`https://www.googleapis.com/calendar/v3/calendars/primary/events`, {
-              method: 'POST',
-              headers: { 
-                'Authorization': `Bearer ${token}`,
-                'Content-Type': 'application/json'
-              },
-              body: JSON.stringify(calendarEvent)
-            });
-          }
-          syncedCount++;
-        }
-      }
-      
-      showToast(language === 'ja' ? `${syncedCount}件の予定を同期しました` : `Synced ${syncedCount} events`);
-    } catch (e) {
-      console.error(e);
-      showToast(language === 'ja' ? '同期エラーが発生しました' : 'Sync error occurred');
-    }
   };
 
   const handleAddEvent = async () => {
@@ -1642,52 +1537,6 @@ export default function App() {
       .slice(0, 3);
   }, [submissions]);
 
-  const renderWelcomeModal = () => (
-    <AnimatePresence>
-      {showWelcomeModal && (
-        <motion.div 
-          initial={{ opacity: 0 }}
-          animate={{ opacity: 1 }}
-          exit={{ opacity: 0 }}
-          className="fixed inset-0 z-[500] flex items-center justify-center p-4 sm:p-6 bg-black/60 backdrop-blur-md"
-        >
-          <motion.div 
-            initial={{ scale: 0.9, opacity: 0, y: 20 }}
-            animate={{ scale: 1, opacity: 1, y: 0 }}
-            exit={{ scale: 0.9, opacity: 0, y: 20 }}
-            className="m3-card !bg-[var(--m3-surface-container-high)] w-full max-w-lg flex flex-col shadow-2xl relative overflow-hidden"
-          >
-            <div className="p-6 sm:p-8 space-y-6">
-              <div className="w-16 h-16 bg-[var(--m3-primary-container)] rounded-[20px] flex items-center justify-center text-[var(--m3-on-primary-container)] rotate-3">
-                <BookOpen className="w-8 h-8" />
-              </div>
-              
-              <div>
-                <h2 className="text-2xl font-black text-[var(--m3-on-surface)] mb-2">
-                  {language === 'ja' ? 'ようこそ！' : 'Welcome!'}
-                </h2>
-                <p className="text-[var(--m3-on-surface-variant)] leading-relaxed">
-                  {language === 'ja' 
-                    ? 'このアプリでは、タスクや予定を美しく一元管理できます。進捗の管理、Googleカレンダーとの同期、タイマーによる集中機能などをご利用いただけます。まずは右下の「追加」ボタンから新しいタスクを作成してみましょう！' 
-                    : 'Manage your tasks and events beautifully. You can track progress, sync with Google Calendar, and stay focused with built-in timers. Start by adding a new task using the "+" button!'}
-                </p>
-              </div>
-
-              <div className="pt-4 flex justify-end">
-                <button 
-                  onClick={handleCloseWelcomeModal}
-                  className="m3-button-primary px-8"
-                >
-                  {language === 'ja' ? '始める' : 'Get Started'}
-                </button>
-              </div>
-            </div>
-          </motion.div>
-        </motion.div>
-      )}
-    </AnimatePresence>
-  );
-
   const renderTermsModal = () => (
     <AnimatePresence>
       {showTermsModal && (
@@ -2455,9 +2304,9 @@ export default function App() {
                 transition={{ duration: 0.3, ease: "easeOut" }}
                 initial={{ opacity: 0, scale: 0.9 }}
                 animate={{ opacity: 1, scale: 1 }}
-                className="h-full flex flex-col items-center justify-center text-center py-24 px-6 relative"
+                className="h-full flex flex-col items-center justify-center text-center py-24 px-6 relative bg-[var(--m3-surface-container)]/30 rounded-[32px] border-2 border-dashed border-[var(--m3-outline-variant)]/30 mt-8 mb-4 max-w-2xl mx-auto"
               >
-                <div className="relative group">
+                <div className="relative group mb-2">
                   <div className="absolute -inset-8 bg-[var(--m3-primary)]/5 rounded-full blur-2xl group-hover:bg-[var(--m3-primary)]/10 transition-all duration-700" />
                   {theme === 'dog' ? <Dog className="w-24 h-24 mb-6 text-[var(--m3-primary)]/40 relative z-10 animate-bounce" /> :
                    theme === 'cat' ? <Cat className="w-24 h-24 mb-6 text-[var(--m3-primary)]/40 relative z-10 animate-pulse" /> :
@@ -2465,8 +2314,8 @@ export default function App() {
                    theme === 'flower' ? <Flower className="w-24 h-24 mb-6 text-[var(--m3-primary)]/40 relative z-10 animate-pulse" /> :
                    <BookOpen className="w-20 h-20 mb-6 text-[var(--m3-primary)]/30 relative z-10" />}
                 </div>
-                <p className="font-black text-lg text-[var(--m3-on-surface-variant)]/60 uppercase tracking-widest">{t.noTasks}</p>
-                <p className="text-sm font-bold text-[var(--m3-on-surface-variant)]/40 mt-2">{language === 'ja' ? '新しいタスクを追加してください' : 'Add a new task to get started'}</p>
+                <p className="font-black text-xl text-[var(--m3-on-surface)] uppercase tracking-widest bg-clip-text text-transparent bg-gradient-to-r from-[var(--m3-primary)] to-[var(--m3-on-surface-variant)]">{t.noTasks || 'No Tasks'}</p>
+                <p className="text-sm font-bold text-[var(--m3-on-surface-variant)]/60 mt-3 max-w-sm">{language === 'ja' ? '右下の＋ボタンからタスクや予定を追加して、スケジュールを管理しましょう！' : 'Add a new task or event from the + button to manage your schedule!'}</p>
               </motion.div>
             )}
           </motion.div>
@@ -2510,12 +2359,6 @@ export default function App() {
             </div>
             <div className="flex items-center gap-3">
               <button
-                onClick={syncToGoogleCalendar}
-                className="hidden sm:flex px-4 py-2 bg-[var(--m3-primary-container)] hover:bg-[var(--m3-primary-container)]/80 text-[var(--m3-on-primary-container)] rounded-2xl text-xs font-black tracking-widest transition-all active:scale-95 shadow-sm"
-              >
-                {language === 'ja' ? 'Googleに同期' : 'Sync to Google'}
-              </button>
-              <button
                 onClick={() => setSelectedDate(new Date())}
                 className="hidden sm:flex px-4 py-2 bg-[var(--m3-secondary-container)] hover:bg-[var(--m3-secondary-container)]/80 text-[var(--m3-on-secondary-container)] rounded-2xl text-xs font-black uppercase tracking-widest transition-all active:scale-95 shadow-sm"
               >
@@ -2533,22 +2376,6 @@ export default function App() {
           <div className="flex-1 overflow-hidden flex flex-col lg:flex-row h-full">
             {/* Left Column: Calendar Grid */}
             <div className="flex-1 overflow-y-auto p-4 sm:p-6 lg:p-8 space-y-6 lg:border-r border-[var(--m3-outline-variant)]/30 custom-scrollbar">
-              
-              {/* Google Calendar Sync Info */}
-              <div className="bg-[var(--m3-secondary-container)]/50 text-[var(--m3-on-secondary-container)] p-3 rounded-2xl text-xs flex flex-col sm:flex-row items-start sm:items-center gap-2 sm:gap-3 border border-[var(--m3-outline-variant)]/20 shadow-sm">
-                <div className="bg-[var(--m3-secondary-container)] text-[var(--m3-on-secondary-container)] p-1.5 rounded-full shrink-0">
-                  <AlertCircle className="w-4 h-4 sm:w-5 sm:h-5" />
-                </div>
-                <div className="flex-1 leading-relaxed">
-                  <span className="font-bold mr-2 hidden sm:inline">
-                    {language === 'ja' ? 'Googleカレンダー同期:' : 'Google Calendar Sync:'}
-                  </span>
-                  {language === 'ja' 
-                    ? '右上のボタンから予定をGoogleカレンダーに追加できます。Firebase (Google Cloud) コンソールで「Google Calendar API」が有効になっている必要があります。認証ポップアップがブロックされる場合は別タブで開いてください。' 
-                    : 'You can sync events to Google Calendar. Ensure the "Google Calendar API" is enabled in your Google Cloud Console. If the popup is blocked, please open the preview in a new tab.'}
-                </div>
-              </div>
-
               {/* View Switcher/Navigation Header */}
               <div className="flex flex-col sm:flex-row items-center gap-4 bg-[var(--m3-surface-container-low)] p-3 rounded-3xl border border-[var(--m3-outline-variant)]/20 shadow-sm">
                 <div className="flex p-1 bg-[var(--m3-surface-container-high)] rounded-[18px] border border-[var(--m3-outline-variant)]/20 shadow-inner w-full sm:w-auto">
@@ -3875,7 +3702,7 @@ export default function App() {
                     </div>
                   </div>
                   <div className="space-y-3">
-                    <label className="text-xs font-bold text-[var(--m3-on-surface-variant)] uppercase tracking-widest px-1">{language === 'ja' ? '予定日 (カレンダー配置)' : 'Scheduled Date (Calendar)'}</label>
+                    <label className="text-xs font-bold text-[var(--m3-on-surface-variant)] uppercase tracking-widest px-1">{language === 'ja' ? '予定日' : 'Scheduled Date'}</label>
                     <div className="flex flex-col sm:flex-row gap-3">
                        <input 
                         name="scheduledDate"
@@ -4405,7 +4232,7 @@ export default function App() {
                     </div>
                   </div>
                   <div className="space-y-3">
-                    <label className="text-xs font-bold text-[var(--m3-on-surface-variant)] uppercase tracking-widest px-1">{language === 'ja' ? '予定日 (カレンダー配置)' : 'Scheduled Date (Calendar)'}</label>
+                    <label className="text-xs font-bold text-[var(--m3-on-surface-variant)] uppercase tracking-widest px-1">{language === 'ja' ? '予定日' : 'Scheduled Date'}</label>
                     <div className="flex flex-col sm:flex-row gap-3">
                        <input 
                         name="scheduledDate"
@@ -4603,7 +4430,6 @@ export default function App() {
       </AnimatePresence>
 
       {renderTermsModal()}
-      {renderWelcomeModal()}
 
       <AnimatePresence>
         {isMobileMenuOpen && (
@@ -4816,25 +4642,21 @@ function SubmissionCard({
         </div>
         <div className="flex-1 min-w-0">
           <div className="flex items-center gap-2 mb-0.5">
-            <motion.span 
-              layoutId={`subject-${submission.id}`} 
-              transition={{ duration: 0.25, ease: "easeOut" }}
+            <div 
               className="text-xs font-black text-[var(--m3-primary)] uppercase tracking-wider whitespace-nowrap truncate max-w-[120px]"
             >
-              {submission.subject}
-            </motion.span>
+              {submission.subject || t.no_subject || "科目なし"}
+            </div>
             <span className="text-xs text-[var(--m3-outline)] shrink-0">•</span>
             <span className="text-xs font-medium text-[var(--m3-on-surface-variant)] shrink-0">
               {format(((submission.deletedAt || submission.completedAt) as any)?.toDate() || new Date(), 'yyyy/MM/dd HH:mm')}
             </span>
           </div>
-          <motion.h3 
-            layoutId={`title-${submission.id}`} 
-            transition={{ duration: 0.25, ease: "easeOut" }}
+          <h3 
             className="text-sm font-bold text-[var(--m3-on-surface)] line-clamp-2 leading-tight"
           >
             {submission.title}
-          </motion.h3>
+          </h3>
         </div>
       </motion.div>
     );
@@ -4895,9 +4717,9 @@ function SubmissionCard({
         <div className="flex items-center justify-between gap-1 mb-1">
           <motion.span 
             layoutId={`subject-${submission.id}`} 
-            className="text-[10px] font-black uppercase tracking-wider text-[var(--m3-primary)] whitespace-nowrap truncate"
+            className="text-[10px] font-black uppercase tracking-wider text-[var(--m3-primary)] whitespace-nowrap truncate px-1"
           >
-            {submission.subject}
+            {submission.subject || t.no_subject || "科目なし"}
           </motion.span>
           <div className={cn(
             "flex items-center gap-1 px-2 py-0.5 rounded-full text-[9px] font-black uppercase tracking-wider shadow-sm",
