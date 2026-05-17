@@ -1011,23 +1011,17 @@ export default function App() {
       let finalProgress = newProgress;
       let finalCompletedAt = newProgress === 100 ? serverTimestamp() : submission.completedAt || null;
 
-      if (newProgress === 100 && submission.status !== 'completed') {
-        setConfirmDialog({
-          title: t.complete,
-          message: t.askToComplete,
-          onConfirm: async () => {
-            await finalizeActivity(currentTimerId, newCurrentPage, 100, 'completed', [...(submission.activityLogs || []), newLog], serverTimestamp());
-            setConfirmDialog(null);
-          },
-          onCancel: async () => {
-            await finalizeActivity(currentTimerId, newCurrentPage, 99, 'in-progress', [...(submission.activityLogs || []), newLog], null);
-            setConfirmDialog(null);
-          }
-        });
-        return;
-      }
-
       await finalizeActivity(currentTimerId, newCurrentPage, finalProgress, finalStatus, [...(submission.activityLogs || []), newLog], finalCompletedAt);
+      
+      if (newProgress === 100 && submission.status !== 'completed') {
+        confetti({
+          particleCount: 150,
+          spread: 70,
+          origin: { y: 0.6 },
+          colors: ['#364fc7', '#2b8a3e', '#fab005', '#fa5252']
+        });
+        showToast(t.taskCompletedMessage);
+      }
     } catch (error) {
       handleFirestoreError(error, OperationType.UPDATE, `submissions/${activeTimerId}`);
     }
@@ -1198,37 +1192,18 @@ export default function App() {
     }
 
     const isCompleting = progress === 100 && editData.status !== 'completed';
-    if (isCompleting) {
-      setConfirmDialog({
-        title: t.complete,
-        message: t.confirmComplete,
-        onConfirm: async () => {
-          try {
-            await updateDoc(doc(db, 'submissions', editData.id), {
-              ...updatePayload,
-              status: 'completed',
-              completedAt: editData.completedAt || serverTimestamp()
-            });
-            confetti({ particleCount: 150, spread: 70, origin: { y: 0.6 } });
-            showToast(t.taskCompletedMessage);
-            setIsEditing(false);
-            setEditData(null);
-            setConfirmDialog(null);
-          } catch (error) {
-            handleFirestoreError(error, OperationType.UPDATE, `submissions/${editData.id}`);
-          }
-        },
-        onCancel: () => setConfirmDialog(null)
-      });
-      return;
-    }
-
     try {
       await updateDoc(doc(db, 'submissions', editData.id), {
         ...updatePayload,
         status: editData.status === 'completed' ? 'completed' : progress === 100 ? 'completed' : progress > 0 ? 'in-progress' : 'pending',
         completedAt: (progress === 100 || editData.status === 'completed') ? (editData.completedAt || serverTimestamp()) : null
       });
+
+      if (isCompleting) {
+        confetti({ particleCount: 150, spread: 70, origin: { y: 0.6 } });
+        showToast(t.taskCompletedMessage);
+      }
+
       setIsEditing(false);
       setEditData(null);
     } catch (error) {
@@ -1264,20 +1239,7 @@ export default function App() {
     if (!submission) return;
 
     const isCompleting = submission.status !== 'completed';
-    
-    if (isCompleting) {
-      setConfirmDialog({
-        title: t.complete,
-        message: t.confirmComplete,
-        onConfirm: async () => {
-          await performToggle(id, true);
-          setConfirmDialog(null);
-        },
-        onCancel: () => setConfirmDialog(null)
-      });
-    } else {
-      await performToggle(id, false);
-    }
+    await performToggle(id, isCompleting);
   };
 
   const performToggle = async (id: string, isCompleting: boolean) => {
@@ -4713,7 +4675,10 @@ function SubmissionCard({
       </div>
 
       {/* Main Content Vertical */}
-      <div className="flex flex-col gap-1.5 min-w-0 relative z-10 overflow-visible">
+      <div className={cn(
+        "flex flex-col gap-1.5 min-w-0 relative z-10 overflow-visible transition-all duration-500 delay-150",
+        submission.status === 'completed' && "opacity-40 grayscale"
+      )}>
         <div className="flex items-center justify-between gap-1 mb-1">
           <motion.span 
             layoutId={`subject-${submission.id}`} 
@@ -4733,7 +4698,7 @@ function SubmissionCard({
         <motion.h3 
           layoutId={`title-${submission.id}`} 
           className={cn(
-            "text-base sm:text-lg font-bold text-[var(--m3-on-surface)] leading-snug tracking-tight break-words whitespace-normal",
+            "text-base sm:text-lg font-bold text-[var(--m3-on-surface)] leading-snug tracking-tight break-words whitespace-normal transition-colors duration-500",
             submission.priority === 'high' && submission.status !== 'completed' && "text-[var(--m3-error)]"
           )}
         >
@@ -4741,7 +4706,10 @@ function SubmissionCard({
         </motion.h3>
       </div>
 
-      <div className="flex flex-col gap-2.5 mt-4 min-h-0 relative z-10">
+      <div className={cn(
+        "flex flex-col gap-2.5 mt-4 min-h-0 relative z-10 transition-all duration-500 delay-150",
+        submission.status === 'completed' && "opacity-40 grayscale"
+      )}>
         {/* Status/Deadlines */}
         <div className="flex flex-wrap items-center gap-1.5 sm:gap-2">
           <div className={cn(
@@ -4801,6 +4769,27 @@ function SubmissionCard({
           </div>
         )}
       </div>
+
+      {/* Completed Stamp Effect */}
+      <AnimatePresence>
+        {submission.status === 'completed' && (
+          <motion.div
+            initial={{ scale: 3, opacity: 0, rotate: -30 }}
+            animate={{ scale: 1, opacity: 0.85, rotate: -12 }}
+            exit={{ scale: 0, opacity: 0 }}
+            transition={{
+              type: 'spring',
+              stiffness: 250,
+              damping: 15
+            }}
+            className="absolute inset-0 flex items-center justify-center pointer-events-none z-40"
+          >
+            <div className="border-[6px] border-red-500 text-red-500 rounded-2xl px-6 py-2 text-4xl font-black tracking-widest uppercase shadow-[0_0_15px_rgba(239,68,68,0.2)] bg-red-500/5 backdrop-blur-sm">
+              {language === 'ja' ? '済' : 'DONE'}
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
     </motion.div>
   );
 }
