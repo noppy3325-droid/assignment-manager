@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useMemo, useRef, useCallback } from 'react';
 import { motion, AnimatePresence, LayoutGroup } from 'motion/react';
-import { Plus, Calendar, BookOpen, CheckCircle2, Clock, ChevronRight, ChevronDown, X, Settings, LogOut, LogIn, Trash2, Sun, Moon, Zap, Play, Pause, Square, CheckSquare, Edit3, Coffee, Brain, Eye, EyeOff, AlertCircle, Dog, Cat, Bird, TreePine, PawPrint, Rabbit, Flower, Flower2, MousePointer2, Menu, RotateCcw, Search, Keyboard } from 'lucide-react';
+import { Plus, Calendar, BookOpen, CheckCircle2, Clock, ChevronRight, ChevronDown, X, Settings, LogOut, LogIn, Trash2, Sun, Moon, Zap, Play, Pause, Square, CheckSquare, Edit3, Coffee, Brain, Eye, EyeOff, AlertCircle, Dog, Cat, Bird, TreePine, PawPrint, Rabbit, Flower, Flower2, MousePointer2, Menu, RotateCcw, Search, Keyboard, Sparkles } from 'lucide-react';
 import { format, differenceInDays, isPast, isToday, startOfDay, formatDistanceToNow, startOfWeek, endOfWeek, startOfMonth, endOfMonth, addDays, isSameMonth, isSameDay } from 'date-fns';
 import { ja, enUS, vi } from 'date-fns/locale';
 import { DayPicker } from 'react-day-picker';
@@ -468,9 +468,9 @@ export default function App() {
     return (saved as Language) || 'ja';
   });
   const [modalPriority, setModalPriority] = useState<'low' | 'medium' | 'high'>('medium');
-  const [theme, setTheme] = useState<'light' | 'dark' | 'dog' | 'cat' | 'animal' | 'flower'>(() => {
+  const [theme, setTheme] = useState<'lumina' | 'light' | 'dark' | 'dog' | 'cat' | 'animal' | 'flower'>(() => {
     const saved = localStorage.getItem('app-theme');
-    return (saved as 'light' | 'dark' | 'dog' | 'cat' | 'animal' | 'flower') || 'light';
+    return (saved as 'lumina' | 'light' | 'dark' | 'dog' | 'cat' | 'animal' | 'flower') || 'lumina';
   });
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
   const [subjects, setSubjects] = useState<string[]>(() => {
@@ -616,7 +616,7 @@ export default function App() {
       const dateToUse = sub.scheduledDate || sub.deadline;
       if (!dateToUse) return;
       
-      const dateKey = format(dateToUse instanceof Date ? dateToUse : dateToUse.toDate(), 'yyyy-MM-dd');
+      const dateKey = format(dateToUse instanceof Date ? dateToUse : (dateToUse?.toDate?.() || new Date()), 'yyyy-MM-dd');
       if (!map[dateKey]) map[dateKey] = [];
       map[dateKey].push(sub);
     });
@@ -629,7 +629,7 @@ export default function App() {
       if (sub.isDeleted) return false;
       const dateToUse = sub.scheduledDate || sub.deadline;
       if (!dateToUse) return false;
-      return isSameDay(dateToUse instanceof Date ? dateToUse : dateToUse.toDate(), selectedDate);
+      return isSameDay(dateToUse instanceof Date ? dateToUse : (dateToUse?.toDate?.() || new Date()), selectedDate);
     });
   }, [submissions, selectedDate]);
 
@@ -642,7 +642,7 @@ export default function App() {
     setTimeout(() => setToastMessage(null), 3000);
   };
 
-  const t = translations[language];
+  const t = translations[language] || translations['ja'];
 
   const closeUpdateNotice = () => {
     localStorage.setItem('app-last-version', APP_VERSION);
@@ -1495,7 +1495,7 @@ export default function App() {
   const recentActivities = useMemo(() => {
     return submissions
       .flatMap(s => (s.activityLogs || []).map(log => ({ ...log, taskTitle: s.title })))
-      .sort((a, b) => b.timestamp.toMillis() - a.timestamp.toMillis())
+      .sort((a, b) => (b.timestamp?.toMillis?.() || Date.now()) - (a.timestamp?.toMillis?.() || Date.now()))
       .slice(0, 3);
   }, [submissions]);
 
@@ -1506,7 +1506,7 @@ export default function App() {
           initial={{ opacity: 0 }}
           animate={{ opacity: 1 }}
           exit={{ opacity: 0 }}
-          className="fixed inset-0 z-[400] flex items-center justify-center p-4 sm:p-6 bg-black/60 backdrop-blur-md"
+          className="fixed inset-0 z-[400] flex items-center justify-center p-4 sm:p-6 m3-dialog-backdrop"
         >
           <motion.div 
             initial={{ scale: 0.9, opacity: 0, y: 20 }}
@@ -1790,7 +1790,7 @@ export default function App() {
                   <div className="text-xs font-bold text-[var(--m3-on-surface)] line-clamp-1">{log.taskTitle}</div>
                   <div className="flex items-center gap-1.5 mt-0.5">
                     <span className="text-xs text-[var(--m3-on-surface-variant)] font-medium">
-                      {formatDistanceToNow(log.timestamp.toDate(), { addSuffix: true, locale: language === 'ja' ? ja : language === 'vi' ? vi : enUS })}
+                      {formatDistanceToNow(log.timestamp?.toDate?.() || new Date(), { addSuffix: true, locale: language === 'ja' ? ja : language === 'vi' ? vi : enUS })}
                     </span>
                     <span className="text-xs text-[var(--m3-primary)] font-bold">
                       +{log.progressIncrement}{log.type === 'pages' ? 'p' : '%'}
@@ -1820,7 +1820,7 @@ export default function App() {
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
-            className="fixed inset-0 z-[200] flex items-center justify-center p-4 sm:p-6 bg-black/40 backdrop-blur-md"
+            className="fixed inset-0 z-[200] flex items-center justify-center p-4 sm:p-6 m3-dialog-backdrop"
           >
             <motion.div 
               initial={{ scale: 0.9, opacity: 0, y: 20 }}
@@ -1885,8 +1885,12 @@ export default function App() {
               <Menu className="w-5 h-5 sm:w-6 sm:h-6" />
             </button>
 
-            <div className="w-10 h-10 sm:w-12 sm:h-12 rounded-2xl bg-[var(--m3-primary)] flex shrink-0 items-center justify-center text-[var(--m3-on-primary)] shadow-md shadow-[var(--m3-primary)]/10 overflow-hidden relative">
-              {theme === 'dog' ? <Dog className="w-6 h-6 sm:w-7 sm:h-7" /> :
+            <div className={cn(
+              "w-10 h-10 sm:w-12 sm:h-12 rounded-2xl flex shrink-0 items-center justify-center text-[var(--m3-on-primary)] shadow-md shadow-[var(--m3-primary)]/10 overflow-hidden relative",
+              theme === 'lumina' ? "bg-gradient-to-br from-indigo-300 via-purple-300 to-pink-300 text-white" : "bg-[var(--m3-primary)]"
+            )}>
+              {theme === 'lumina' ? <Sparkles className="w-6 h-6 sm:w-7 sm:h-7" /> :
+               theme === 'dog' ? <Dog className="w-6 h-6 sm:w-7 sm:h-7" /> :
                theme === 'cat' ? <Cat className="w-6 h-6 sm:w-7 sm:h-7" /> :
                theme === 'animal' ? <Rabbit className="w-6 h-6 sm:w-7 sm:h-7" /> :
                theme === 'flower' ? <Flower className="w-6 h-6 sm:w-7 sm:h-7" /> :
@@ -1900,7 +1904,12 @@ export default function App() {
                </motion.div>
             </div>
             <div className="min-w-0">
-              <h1 className="text-lg sm:text-2xl font-black tracking-tight text-[var(--m3-on-surface)] truncate">{t.appName}</h1>
+              <h1 className={cn(
+                "text-lg sm:text-2xl font-black tracking-tight truncate",
+                theme === 'lumina' ? "lumina-gradient-text" : "text-[var(--m3-on-surface)]"
+              )}>
+                {t.appName}
+              </h1>
               <p className="text-[10px] sm:text-xs text-[var(--m3-on-surface-variant)]/60 mt-0.5 font-black uppercase tracking-widest leading-none">
                 {format(new Date(), language === 'ja' ? 'M月d日 (EEEE)' : 'MMMM d (EEEE)', { locale: language === 'ja' ? ja : language === 'vi' ? vi : enUS })}
               </p>
@@ -2295,7 +2304,7 @@ export default function App() {
           animate={{ opacity: 1 }}
           exit={{ opacity: 0 }}
           onClick={() => setIsCalendarOpen(false)}
-          className="fixed inset-0 bg-black/40 backdrop-blur-sm z-[150]"
+          className="fixed inset-0 m3-dialog-backdrop z-[150]"
         />
         <motion.div
           initial={{ opacity: 0, scale: 0.95 }}
@@ -3027,7 +3036,7 @@ export default function App() {
         animate={{ opacity: 1 }}
         exit={{ opacity: 0 }}
         transition={{ duration: 0.2, ease: "easeOut" }}
-        className="fixed inset-0 z-[100] flex items-center justify-center p-6 bg-black/40 backdrop-blur-sm"
+        className="fixed inset-0 z-[100] flex items-center justify-center p-6 m3-dialog-backdrop"
       >
           <motion.div 
             initial={{ opacity: 0, scale: 0.9, y: 20 }}
@@ -3075,6 +3084,7 @@ export default function App() {
                   className="w-full px-4 py-3 rounded-2xl bg-[var(--m3-surface-container)] border border-[var(--m3-outline)]/10 flex items-center justify-between font-bold text-sm hover:bg-[var(--m3-surface-container-high)] transition-all"
                 >
                   <div className="flex items-center gap-3">
+                    {theme === 'lumina' && <Sparkles className="w-5 h-5 text-indigo-500" />}
                     {theme === 'light' && <Sun className="w-5 h-5 text-orange-500" />}
                     {theme === 'dark' && <Moon className="w-5 h-5 text-indigo-400" />}
                     {theme === 'dog' && <Dog className="w-5 h-5 text-[#8b5a2b]" />}
@@ -3082,7 +3092,8 @@ export default function App() {
                     {theme === 'animal' && <Rabbit className="w-5 h-5 text-[#b16300]" />}
                     {theme === 'flower' && <Flower className="w-5 h-5 text-[#9a4058]" />}
                     <span>
-                      {theme === 'light' ? t.light : 
+                      {theme === 'lumina' ? t.theme_lumina :
+                       theme === 'light' ? t.light : 
                        theme === 'dark' ? t.navy : 
                        theme === 'dog' ? t.theme_dog : 
                        theme === 'cat' ? t.theme_cat : 
@@ -3107,6 +3118,7 @@ export default function App() {
                         className="absolute z-50 top-full left-0 right-0 bg-[var(--m3-surface-container-high)] rounded-2xl shadow-xl border border-[var(--m3-outline)]/10 overflow-hidden py-1"
                       >
                         {[
+                          { id: 'lumina', icon: Sparkles, label: t.theme_lumina, color: 'text-indigo-500' },
                           { id: 'light', icon: Sun, label: t.light, color: 'text-orange-500' },
                           { id: 'dark', icon: Moon, label: t.navy, color: 'text-indigo-400' },
                           { id: 'dog', icon: Dog, label: t.theme_dog, color: 'text-[#8b5a2b]' },
@@ -3297,7 +3309,7 @@ export default function App() {
           >
             <div 
               onClick={() => setSelectedId(null)}
-              className="absolute inset-0 bg-black/20 backdrop-blur-md"
+              className="absolute inset-0 m3-dialog-backdrop"
             />
             <motion.div 
               layoutId={selectedId}
@@ -3376,7 +3388,7 @@ export default function App() {
                           </div>
                           <div className="flex-1 min-w-0">
                             <div className="text-xs font-bold text-[var(--m3-on-surface-variant)] opacity-60">
-                              {format(log.timestamp.toDate(), 'M/d HH:mm')}
+                              {format(log.timestamp?.toDate?.() || new Date(), 'M/d HH:mm')}
                             </div>
                             <div className="text-sm font-black text-[var(--m3-on-surface)]">
                               {log.durationMinutes}{language === 'ja' ? '分間のセッション' : ' min session'}
@@ -3505,7 +3517,7 @@ export default function App() {
           >
             <div 
               onClick={() => setIsAdding(false)}
-              className="absolute inset-0 bg-black/10 backdrop-blur-sm"
+              className="absolute inset-0 m3-dialog-backdrop"
             />
             <motion.div 
               initial={{ y: '100%', opacity: 0 }}
@@ -3781,7 +3793,7 @@ export default function App() {
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
             transition={{ duration: 0.3, ease: "easeOut" }}
-            className="fixed inset-0 z-[100] flex items-center justify-center p-4 sm:p-6 bg-black/60 backdrop-blur-xl"
+            className="fixed inset-0 z-[100] flex items-center justify-center p-4 sm:p-6 m3-dialog-backdrop"
           >
             <motion.div 
               initial={{ scale: 0.8, opacity: 0, y: 40 }}
@@ -4061,7 +4073,7 @@ export default function App() {
                 setIsEditing(false);
                 setEditData(null);
               }}
-              className="absolute inset-0 bg-black/10 backdrop-blur-sm"
+              className="absolute inset-0 m3-dialog-backdrop"
             />
             <motion.div 
               initial={{ y: '100%', opacity: 0 }}
@@ -4295,7 +4307,7 @@ export default function App() {
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
-            className="fixed inset-0 z-[250] flex items-center justify-center p-6 bg-black/40 backdrop-blur-sm"
+            className="fixed inset-0 z-[250] flex items-center justify-center p-6 m3-dialog-backdrop"
           >
             <motion.div 
               initial={{ y: 20, opacity: 0 }}
@@ -4355,7 +4367,7 @@ export default function App() {
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
-            className="fixed inset-0 z-[300] flex items-center justify-center p-6 bg-black/40 backdrop-blur-sm"
+            className="fixed inset-0 z-[300] flex items-center justify-center p-6 m3-dialog-backdrop"
           >
             <motion.div 
               initial={{ scale: 0.9, opacity: 0 }}
@@ -4401,7 +4413,7 @@ export default function App() {
               animate={{ opacity: 1 }}
               exit={{ opacity: 0 }}
               transition={{ duration: 0.2 }}
-              className="fixed inset-0 bg-black/40 backdrop-blur-sm z-[200] lg:hidden"
+              className="fixed inset-0 m3-dialog-backdrop z-[200] lg:hidden"
               onClick={() => setIsMobileMenuOpen(false)}
             />
             <motion.div 
@@ -4469,7 +4481,7 @@ export default function App() {
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
-            className="fixed inset-0 z-[300] flex items-center justify-center p-4 sm:p-6 bg-black/60 backdrop-blur-md"
+            className="fixed inset-0 z-[300] flex items-center justify-center p-4 sm:p-6 m3-dialog-backdrop"
           >
             <motion.div 
               initial={{ scale: 0.9, opacity: 0, y: 20 }}
@@ -4550,7 +4562,7 @@ function SubmissionCard({
   hasMoreInSeries?: boolean;
   key?: string | number;
 }) {
-  const t = translations[language];
+  const t = translations[language] || translations['ja'];
   const daysLeft = differenceInDays(submission.deadline, new Date());
   const isOverdue = isPast(submission.deadline) && submission.status !== 'completed';
   const showCompact = isHistoryView || submission.isDeleted;
@@ -4581,8 +4593,8 @@ function SubmissionCard({
         onClick={onClick}
         whileTap={{ scale: 0.99 }}
         className={cn(
-          "group relative bg-[var(--m3-surface-container)] rounded-[20px] p-5 flex items-center gap-4 border cursor-pointer transition-all overflow-visible",
-          isSelected ? "border-[var(--m3-primary)] bg-[var(--m3-primary-container)]/10" : "border-[var(--m3-outline)]/10 hover:border-[var(--m3-primary)]/30",
+          "m3-card group relative !rounded-[20px] !p-5 flex items-center gap-4 cursor-pointer transition-all overflow-visible",
+          isSelected ? "border-[var(--m3-primary)] bg-[var(--m3-primary-container)]/10" : "hover:border-[var(--m3-primary)]/30",
           isHighlighted && "z-20 ring-2 ring-[var(--m3-primary)] shadow-md shadow-[var(--m3-primary)]/15 scale-[1.01]"
         )}
       >
@@ -4611,7 +4623,7 @@ function SubmissionCard({
             </div>
             <span className="text-xs text-[var(--m3-outline)] shrink-0">•</span>
             <span className="text-xs font-medium text-[var(--m3-on-surface-variant)] shrink-0">
-              {format(((submission.deletedAt || submission.completedAt) as any)?.toDate() || new Date(), 'yyyy/MM/dd HH:mm')}
+              {format(((submission.deletedAt || submission.completedAt) as any)?.toDate?.() || new Date(), 'yyyy/MM/dd HH:mm')}
             </span>
           </div>
           <h3 
@@ -4641,15 +4653,15 @@ function SubmissionCard({
       whileTap={{ scale: 0.98 }}
       whileHover={{ y: -4 }}
       className={cn(
-        "group relative cursor-pointer bg-[var(--m3-surface-container)] flex flex-col justify-between overflow-visible transition-[box-shadow,border-color,background-color,transform] duration-300",
-        "h-full min-h-[180px] rounded-[24px] p-5 sm:p-6",
-        "border border-white/10 dark:border-white/5 hover:border-[var(--m3-primary)]/40 hover:shadow-lg",
-        submission.priority === 'high' && submission.status !== 'completed' && "border-[var(--m3-error)]/30 ring-1 ring-[var(--m3-error)]/20 bg-gradient-to-br from-[var(--m3-surface-container)] to-[var(--m3-error)]/10",
-        isHighlighted && "z-30 ring-4 ring-[var(--m3-primary)]/30 border-[var(--m3-primary)] shadow-xl shadow-[var(--m3-primary)]/20 scale-[1.01]",
-        theme === 'dog' && "hover:border-[#8b5a2b]/30",
-        theme === 'cat' && "hover:border-[#c26978]/30",
-        theme === 'animal' && "hover:border-[#b16300]/30",
-        theme === 'flower' && "hover:border-[#9a4058]/30"
+        "m3-card group relative cursor-pointer flex flex-col justify-between overflow-visible transition-[box-shadow,border-color,background-color,transform] duration-300",
+        "h-full min-h-[180px] !rounded-[24px] !p-5 sm:!p-6",
+        "hover:border-[var(--m3-primary)]/50 hover:shadow-lg",
+        submission.priority === 'high' && submission.status !== 'completed' && "border-[var(--m3-error)]/40 ring-2 ring-[var(--m3-error)]/20 bg-gradient-to-br from-[var(--m3-surface-container)] to-[var(--m3-error)]/10",
+        isHighlighted && "z-30 ring-4 ring-[var(--m3-primary)]/40 border-[var(--m3-primary)] shadow-xl shadow-[var(--m3-primary)]/30 scale-[1.01]",
+        theme === 'dog' && "hover:border-[#8b5a2b]/50",
+        theme === 'cat' && "hover:border-[#c26978]/50",
+        theme === 'animal' && "hover:border-[#b16300]/50",
+        theme === 'flower' && "hover:border-[#9a4058]/50"
       )}
     >
       {/* Visual Stacking Effect */}

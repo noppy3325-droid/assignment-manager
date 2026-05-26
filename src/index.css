@@ -7,134 +7,229 @@
   /* Material 3 Colors - Light Default */
   --m3-primary: #005696;
   --m3-on-primary: #ffffff;
-  --m3-primary-container: #d6e3ff;
+  --m3-primary-container: rgba(214, 227, 255, 0.4);
   --m3-on-primary-container: #001b3e;
   
   --m3-secondary: #535f70;
   --m3-on-secondary: #ffffff;
-  --m3-secondary-container: #d7e3f7;
+  --m3-secondary-container: rgba(215, 227, 247, 0.4);
   --m3-on-secondary-container: #101c2b;
   
   --m3-surface: #fdfdff;
   --m3-on-surface: #1a1c1e;
-  --m3-surface-variant: #e1e2ec;
+  --m3-surface-variant: rgba(225, 226, 236, 0.6);
   --m3-on-surface-variant: #44474f;
   
-  --m3-surface-container-low: #f4f6fa;
-  --m3-surface-container: #eaecf1;
-  --m3-surface-container-high: #e4e7ec;
+  --m3-surface-container-low: rgba(255, 255, 255, 0.4);
+  --m3-surface-container: rgba(255, 255, 255, 0.7);
+  --m3-surface-container-high: rgba(255, 255, 255, 0.9);
   
-  --m3-outline: #74777f;
-  --m3-outline-variant: #c4c6d0;
+  --m3-outline: rgba(116, 119, 127, 0.3);
+  --m3-outline-variant: rgba(196, 198, 208, 0.2);
+  --m3-card-border: rgba(0, 86, 150, 0.22);
+  --m3-highlight-top: rgba(255, 255, 255, 0.7);
+  --m3-highlight-bottom: rgba(255, 255, 255, 0.15);
+  --m3-shadow-color: rgba(0, 86, 150, 0.08);
   
   --m3-error: #ba1a1a;
-  --m3-error-container: #ffdad6;
+  --m3-error-container: rgba(255, 218, 214, 0.4);
   --m3-on-error-container: #410002;
-}
-
-@layer base {
-  body.dark {
-    /* Sophisticated Midnight Navy Dark Theme */
-    --m3-primary: #abc7ff;
-    --m3-on-primary: #002f5e;
-    --m3-primary-container: #004682;
-    --m3-on-primary-container: #d6e3ff;
-    
-    --m3-surface: #0b1117;
-    --m3-on-surface: #e2e2e6;
-    --m3-surface-variant: #44474f;
-    --m3-on-surface-variant: #c4c6d0;
-    
-    --m3-surface-container-low: #121820;
-    --m3-surface-container: #182029;
-    --m3-surface-container-high: #1e2732;
-    
-    --m3-outline: #8e9199;
-    --m3-outline-variant: #44474f;
-
-    --m3-error: #ffb4ab;
-    --m3-error-container: #93000a;
-    --m3-on-error-container: #ffdad6;
-  }
-
-  body.theme-dog {
-    --m3-primary: #8b5a2b;
-    --m3-on-primary: #ffffff;
-    --m3-primary-container: #f5e4cc;
-    --m3-on-primary-container: #422810;
-    --m3-surface: #fffefb;
-    --m3-on-surface: #3e2723;
-    --m3-surface-variant: #fdf5ea;
-    --m3-on-surface-variant: #6b5240;
-    --m3-surface-container-low: #fff8f0;
-    --m3-surface-container: #f9e1c9;
-    --m3-surface-container-high: #ebd2ba;
-    --m3-outline: #a38c7f;
-    --m3-outline-variant: #dccbcd;
-    background-image: radial-gradient(#8b5a2b11 1px, transparent 0);
-    background-size: 24px 24px;
-  }
-
-  body.theme-cat {
-    --m3-primary: #c26978;
-    --m3-on-primary: #ffffff;
-    --m3-primary-container: #ffd8df;
-    --m3-on-primary-container: #3d0012;
-    --m3-surface: #fffbfc;
-    --m3-on-surface: #312123;
-    --m3-surface-variant: #fdf2f4;
-    --m3-on-surface-variant: #5d4f52;
-    --m3-surface-container-low: #fcf4f5;
-    --m3-surface-container: #f7ebed;
-    --m3-surface-container-high: #f2e2e5;
-    --m3-outline: #968689;
-    --m3-outline-variant: #d4c2c6;
-    background-image: radial-gradient(#c2697811 1px, transparent 0);
-    background-size: 32px 32px;
-  }
-
-  body.theme-animal {
-    --m3-primary: #b16300;
-    --m3-on-primary: #ffffff;
-    --m3-primary-container: #ffdcbe;
-    --m3-on-primary-container: #2b1400;
-    --m3-surface: #fffcf8;
-    --m3-on-surface: #2b221a;
-    --m3-surface-variant: #fae2ce;
-    --m3-on-surface-variant: #564433;
-    --m3-surface-container-low: #fff8ee;
-    --m3-surface-container: #ffecd6;
-    --m3-surface-container-high: #fedbbc;
-    --m3-outline: #877461;
-    --m3-outline-variant: #d9c2ab;
-    background-image: linear-gradient(#b1630009 1px, transparent 1px), linear-gradient(90deg, #b1630009 1px, transparent 1px);
-    background-size: 40px 40px;
-  }
-
-  body.theme-flower {
-    --m3-primary: #9a4058;
-    --m3-on-primary: #ffffff;
-    --m3-primary-container: #ffd9e0;
-    --m3-on-primary-container: #3e0018;
-    --m3-surface: #fff8f8;
-    --m3-on-surface: #25191b;
-    --m3-surface-variant: #f4dddf;
-    --m3-on-surface-variant: #524345;
-    --m3-surface-container-low: #fcf1f2;
-    --m3-surface-container: #f9ebeb;
-    --m3-surface-container-high: #f4e0e1;
-    --m3-outline: #857375;
-    --m3-outline-variant: #d7c1c3;
-    background-image: radial-gradient(#9a405815 1.5px, transparent 0);
-    background-size: 24px 24px;
-  }
 }
 
 @layer base {
   body {
     @apply bg-[var(--m3-surface)] text-[var(--m3-on-surface)] transition-colors duration-500 select-none;
+    background: 
+      radial-gradient(circle at 10% 10%, rgba(0, 86, 150, 0.1) 0%, transparent 60%),
+      radial-gradient(circle at 90% 90%, rgba(214, 227, 255, 0.4) 0%, transparent 60%),
+      var(--m3-surface);
+    background-attachment: fixed;
   }
   
+  body.dark {
+    /* Sophisticated Midnight Navy Dark Theme */
+    --m3-primary: #abc7ff;
+    --m3-on-primary: #002f5e;
+    --m3-primary-container: rgba(0, 70, 130, 0.4);
+    --m3-on-primary-container: #d6e3ff;
+    
+    --m3-surface: #0b1117;
+    --m3-on-surface: #e2e2e6;
+    --m3-surface-variant: rgba(68, 71, 79, 0.4);
+    --m3-on-surface-variant: #c4c6d0;
+    
+    --m3-surface-container-low: rgba(24, 32, 41, 0.4);
+    --m3-surface-container: rgba(24, 32, 41, 0.65);
+    --m3-surface-container-high: rgba(30, 39, 50, 0.85);
+    
+    --m3-outline: rgba(142, 145, 153, 0.35);
+    --m3-outline-variant: rgba(68, 71, 79, 0.4);
+    --m3-card-border: rgba(171, 199, 255, 0.3);
+    --m3-highlight-top: rgba(255, 255, 255, 0.08);
+    --m3-highlight-bottom: rgba(0, 0, 0, 0.3);
+    --m3-shadow-color: rgba(0, 0, 0, 0.4);
+
+    --m3-error: #ffb4ab;
+    --m3-error-container: rgba(147, 0, 10, 0.4);
+    --m3-on-error-container: #ffdad6;
+
+    background: 
+      radial-gradient(circle at 10% 10%, rgba(171, 199, 255, 0.1) 0%, transparent 60%),
+      radial-gradient(circle at 90% 90%, rgba(0, 70, 130, 0.3) 0%, transparent 60%),
+      #0b1117;
+    background-attachment: fixed;
+  }
+
+  body.theme-dog {
+    --m3-primary: #8b5a2b;
+    --m3-on-primary: #ffffff;
+    --m3-primary-container: rgba(245, 228, 204, 0.5);
+    --m3-on-primary-container: #422810;
+    --m3-surface: #fffefb;
+    --m3-on-surface: #3e2723;
+    --m3-surface-variant: rgba(253, 245, 234, 0.6);
+    --m3-on-surface-variant: #6b5240;
+    --m3-surface-container-low: rgba(255, 248, 240, 0.3);
+    --m3-surface-container: rgba(249, 225, 201, 0.55);
+    --m3-surface-container-high: rgba(235, 210, 186, 0.82);
+    --m3-outline: rgba(163, 140, 127, 0.3);
+    --m3-outline-variant: rgba(220, 203, 205, 0.2);
+    --m3-card-border: rgba(139, 90, 43, 0.35);
+    --m3-highlight-top: rgba(255, 255, 255, 0.6);
+    --m3-highlight-bottom: rgba(255, 255, 255, 0.15);
+    --m3-shadow-color: rgba(139, 90, 43, 0.12);
+    
+    background: 
+      radial-gradient(circle at 0% 0%, rgba(139, 90, 43, 0.1) 0%, transparent 60%),
+      radial-gradient(circle at 100% 100%, rgba(245, 228, 204, 0.5) 0%, transparent 60%),
+      radial-gradient(#8b5a2b11 1px, transparent 0),
+      #fffefb;
+    background-size: 100% 100%, 100% 100%, 24px 24px, 100% 100%;
+    background-attachment: fixed;
+  }
+
+  body.theme-cat {
+    --m3-primary: #c26978;
+    --m3-on-primary: #ffffff;
+    --m3-primary-container: rgba(255, 216, 223, 0.5);
+    --m3-on-primary-container: #3d0012;
+    --m3-surface: #fffbfc;
+    --m3-on-surface: #312123;
+    --m3-surface-variant: rgba(253, 242, 244, 0.6);
+    --m3-on-surface-variant: #5d4f52;
+    --m3-surface-container-low: rgba(252, 244, 245, 0.3);
+    --m3-surface-container: rgba(247, 235, 237, 0.55);
+    --m3-surface-container-high: rgba(242, 226, 229, 0.82);
+    --m3-outline: rgba(150, 134, 137, 0.3);
+    --m3-outline-variant: rgba(212, 194, 198, 0.2);
+    --m3-card-border: rgba(194, 105, 120, 0.35);
+    --m3-highlight-top: rgba(255, 255, 255, 0.6);
+    --m3-highlight-bottom: rgba(255, 255, 255, 0.15);
+    --m3-shadow-color: rgba(194, 105, 120, 0.12);
+    
+    background: 
+      radial-gradient(circle at 10% 10%, rgba(194, 105, 120, 0.1) 0%, transparent 60%),
+      radial-gradient(circle at 90% 90%, rgba(255, 216, 223, 0.5) 0%, transparent 60%),
+      radial-gradient(#c2697811 1px, transparent 0),
+      #fffbfc;
+    background-size: 100% 100%, 100% 100%, 32px 32px, 100% 100%;
+    background-attachment: fixed;
+  }
+
+  body.theme-animal {
+    --m3-primary: #b16300;
+    --m3-on-primary: #ffffff;
+    --m3-primary-container: rgba(255, 220, 190, 0.5);
+    --m3-on-primary-container: #2b1400;
+    --m3-surface: #fffcf8;
+    --m3-on-surface: #2b221a;
+    --m3-surface-variant: rgba(250, 226, 206, 0.6);
+    --m3-on-surface-variant: #564433;
+    --m3-surface-container-low: rgba(255, 248, 238, 0.3);
+    --m3-surface-container: rgba(255, 236, 214, 0.55);
+    --m3-surface-container-high: rgba(254, 219, 188, 0.82);
+    --m3-outline: rgba(135, 116, 97, 0.3);
+    --m3-outline-variant: rgba(217, 194, 171, 0.2);
+    --m3-card-border: rgba(177, 99, 0, 0.35);
+    --m3-highlight-top: rgba(255, 255, 255, 0.61);
+    --m3-highlight-bottom: rgba(255, 255, 255, 0.15);
+    --m3-shadow-color: rgba(177, 99, 0, 0.12);
+    
+    background: 
+      radial-gradient(circle at 100% 0%, rgba(177, 99, 0, 0.1) 0%, transparent 60%),
+      radial-gradient(circle at 0% 100%, rgba(255, 220, 190, 0.5) 0%, transparent 60%),
+      linear-gradient(#b1630009 1px, transparent 1px), 
+      linear-gradient(90deg, #b1630009 1px, transparent 1px),
+      #fffcf8;
+    background-size: 100% 100%, 100% 100%, 40px 40px, 40px 40px, 100% 100%;
+    background-attachment: fixed;
+  }
+
+  body.theme-flower {
+    --m3-primary: #9a4058;
+    --m3-on-primary: #ffffff;
+    --m3-primary-container: rgba(255, 217, 224, 0.5);
+    --m3-on-primary-container: #3e0018;
+    --m3-surface: #fff8f8;
+    --m3-on-surface: #25191b;
+    --m3-surface-variant: rgba(244, 221, 223, 0.6);
+    --m3-on-surface-variant: #524345;
+    --m3-surface-container-low: rgba(252, 241, 242, 0.3);
+    --m3-surface-container: rgba(249, 235, 235, 0.55);
+    --m3-surface-container-high: rgba(244, 224, 225, 0.82);
+    --m3-outline: rgba(133, 115, 117, 0.3);
+    --m3-outline-variant: rgba(215, 193, 195, 0.2);
+    --m3-card-border: rgba(154, 64, 88, 0.35);
+    --m3-highlight-top: rgba(255, 255, 255, 0.6);
+    --m3-highlight-bottom: rgba(255, 255, 255, 0.15);
+    --m3-shadow-color: rgba(154, 64, 88, 0.12);
+    
+    background: 
+      radial-gradient(circle at 10% 90%, rgba(154, 64, 88, 0.1) 0%, transparent 60%),
+      radial-gradient(circle at 90% 10%, rgba(255, 217, 224, 0.5) 0%, transparent 60%),
+      radial-gradient(#9a405815 1.5px, transparent 0),
+      #fff8f8;
+    background-size: 100% 100%, 100% 100%, 24px 24px, 100% 100%;
+    background-attachment: fixed;
+  }
+
+  body.theme-lumina {
+    --m3-primary: #9baef3;
+    --m3-on-primary: #ffffff;
+    --m3-primary-container: rgba(255, 255, 255, 0.4);
+    --m3-on-primary-container: #5c6bc0;
+    --m3-surface: #fdfdff;
+    --m3-on-surface: #1d1d1f;
+    --m3-surface-variant: rgba(255, 255, 255, 0.6);
+    --m3-on-surface-variant: #86868b;
+    --m3-surface-container-low: rgba(255, 255, 255, 0.3);
+    --m3-surface-container: rgba(255, 255, 255, 0.55);
+    --m3-surface-container-high: rgba(255, 255, 255, 0.75);
+    --m3-outline: rgba(0, 0, 0, 0.1);
+    --m3-outline-variant: rgba(0, 0, 0, 0.05);
+    --m3-card-border: rgba(155, 174, 243, 0.5);
+    --m3-highlight-top: rgba(255, 255, 255, 0.85);
+    --m3-highlight-bottom: rgba(255, 255, 255, 0.2);
+    --m3-shadow-color: rgba(155, 174, 243, 0.15);
+
+    background: 
+      radial-gradient(circle at 10% 10%, rgba(162, 194, 250, 0.4) 0%, transparent 60%),
+      radial-gradient(circle at 90% 90%, rgba(206, 178, 255, 0.35) 0%, transparent 60%),
+      radial-gradient(circle at 90% 10%, rgba(255, 185, 203, 0.3) 0%, transparent 50%),
+      #fafafc;
+    background-attachment: fixed;
+  }
+  
+  body.theme-lumina .lumina-gradient-text {
+    background: linear-gradient(135deg, #7c9aff 0%, #ba8cff 50%, #ff8ea9 100%);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text;
+    color: transparent;
+  }
+}
+
+@layer base {  
   input[type="text"], input[type="number"], input[type="date"], input[type="time"], textarea {
     @apply transition-all duration-300 placeholder-[var(--m3-on-surface-variant)]/50 select-text;
   }
@@ -154,7 +249,10 @@
   }
   
   .segmented-item-active {
-    @apply bg-[var(--m3-primary)] text-[var(--m3-on-primary)] shadow-md;
+    background: var(--m3-primary-gradient, linear-gradient(135deg, rgba(255, 255, 255, 0.15) 0%, rgba(0, 0, 0, 0.1) 100%), var(--m3-primary));
+    color: var(--m3-on-primary);
+    box-shadow: 0 4px 12px var(--m3-primary-glow, rgba(0,0,0,0.15)), inset 0 1px 1px rgba(255, 255, 255, 0.2);
+    border: 1px solid rgba(255, 255, 255, 0.1);
   }
   
   .segmented-item-inactive {
@@ -167,7 +265,10 @@
   }
   
   .m3-chip-selected {
-    @apply bg-[var(--m3-primary-container)] text-[var(--m3-on-primary-container)] border-[var(--m3-primary)] shadow-sm;
+    background: var(--m3-primary-container-gradient, linear-gradient(135deg, rgba(255, 255, 255, 0.3) 0%, transparent 100%), var(--m3-primary-container));
+    border-color: var(--m3-primary-border, var(--m3-primary));
+    color: var(--m3-on-primary-container);
+    box-shadow: 0 4px 12px var(--m3-primary-glow, rgba(0,0,0,0.05)), inset 0 1px 1px rgba(255,255,255,0.4);
   }
   
   .m3-chip-unselected {
@@ -176,7 +277,20 @@
 
   /* M3 Components */
   .m3-button-primary {
-    @apply h-14 bg-[var(--m3-primary)] text-[var(--m3-on-primary)] px-6 rounded-3xl font-black text-sm uppercase tracking-widest shadow-md shadow-[var(--m3-primary)]/20 hover:shadow-xl hover:shadow-[var(--m3-primary)]/30 hover:-translate-y-0.5 active:scale-[0.98] active:translate-y-0 disabled:opacity-50 disabled:hover:translate-y-0 transition-all duration-300 flex items-center justify-center gap-2 border border-white/10;
+    @apply h-14 text-[var(--m3-on-primary)] px-6 rounded-3xl font-black text-sm uppercase tracking-widest disabled:opacity-50 disabled:hover:translate-y-0 transition-all duration-300 flex items-center justify-center gap-2;
+    background: var(--m3-primary-gradient, linear-gradient(135deg, rgba(255, 255, 255, 0.2) 0%, transparent 50%, rgba(0, 0, 0, 0.1) 100%), var(--m3-primary));
+    box-shadow: 0 8px 24px var(--m3-primary-glow, rgba(0,0,0,0.2)), inset 0 1px 1px rgba(255, 255, 255, 0.3);
+    border: 1px solid var(--m3-primary-border, rgba(255, 255, 255, 0.2));
+  }
+
+  .m3-button-primary:not(:disabled):hover {
+    box-shadow: 0 12px 32px var(--m3-primary-glow-hover, rgba(0,0,0,0.3)), inset 0 1px 1px rgba(255, 255, 255, 0.4);
+    filter: brightness(1.05);
+    transform: translateY(-2px);
+  }
+  
+  .m3-button-primary:not(:disabled):active {
+    transform: scale(0.98) translateY(0);
   }
   
   .m3-button-tonal {
@@ -196,7 +310,28 @@
   }
   
   .m3-card {
-    @apply bg-[var(--m3-surface-container)] rounded-[32px] p-6 shadow-[0_8px_32px_rgba(0,0,0,0.04)] border border-[var(--m3-outline-variant)]/20 dark:border-white/5 transition-all duration-300;
+    @apply rounded-[32px] p-6 transition-all duration-300;
+    background: var(--m3-surface-container);
+    border: 1.5px solid var(--m3-card-border, var(--m3-outline-variant));
+    box-shadow: 
+      0 16px 40px var(--m3-shadow-color, rgba(0, 0, 0, 0.08)),
+      inset 0 1px 1px var(--m3-highlight-top, rgba(255, 255, 255, 0.5)),
+      inset 0 -1px 1px var(--m3-highlight-bottom, rgba(255, 255, 255, 0.1));
+    backdrop-filter: saturate(180%) blur(24px);
+    -webkit-backdrop-filter: saturate(180%) blur(24px);
+  }
+
+  .bg-\\[var\\(--m3-surface-container-high\\)\\] {
+    background: var(--m3-surface-container-high) !important;
+    backdrop-filter: saturate(180%) blur(24px);
+    -webkit-backdrop-filter: saturate(180%) blur(24px);
+    border: 1.5px solid var(--m3-card-border, var(--m3-outline-variant));
+  }
+
+  .m3-dialog-backdrop {
+    background: rgba(15, 23, 42, 0.35) !important;
+    backdrop-filter: saturate(140%) blur(16px) !important;
+    -webkit-backdrop-filter: saturate(140%) blur(16px) !important;
   }
 
   .no-scrollbar::-webkit-scrollbar {

@@ -16,6 +16,7 @@ export default defineConfig(({mode}) => {
       },
     },
     build: {
+      outDir: 'dist',
       chunkSizeWarningLimit: 1500, // 警告のしきい値を引き上げ
     },
     server: {
