@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useMemo, useRef, useCallback } from 'react';
 import { motion, AnimatePresence, LayoutGroup } from 'motion/react';
-import { Plus, Calendar, BookOpen, CheckCircle2, Clock, ChevronRight, ChevronDown, X, Settings, LogOut, LogIn, Trash2, Sun, Moon, Zap, Play, Pause, Square, CheckSquare, Edit3, Coffee, Brain, Eye, EyeOff, AlertCircle, Dog, Cat, Bird, TreePine, PawPrint, Rabbit, Flower, Flower2, MousePointer2, Menu, RotateCcw, Search, Keyboard, Sparkles } from 'lucide-react';
+import { Plus, Calendar, BookOpen, CheckCircle2, Clock, ChevronRight, ChevronDown, X, Settings, LogOut, LogIn, Trash2, Sun, Moon, Zap, Play, Pause, Square, CheckSquare, Edit3, Coffee, Brain, Eye, EyeOff, AlertCircle, Dog, Cat, Bird, TreePine, PawPrint, Rabbit, Flower, Flower2, MousePointer2, Menu, RotateCcw, Search, Keyboard, Sparkles, Info, Activity, AlertTriangle } from 'lucide-react';
 import { format, differenceInDays, isPast, isToday, startOfDay, formatDistanceToNow, startOfWeek, endOfWeek, startOfMonth, endOfMonth, addDays, isSameMonth, isSameDay } from 'date-fns';
 import { ja, enUS, vi } from 'date-fns/locale';
 import { DayPicker } from 'react-day-picker';
@@ -114,6 +114,7 @@ interface Submission {
   status: 'pending' | 'completed';
   priority: 'low' | 'medium' | 'high';
   progress: number;
+  estimatedHours?: number;
   description?: string;
   taskType: 'pages' | 'percentage';
   startPage?: number;
@@ -135,6 +136,103 @@ const DEFAULT_SUBJECTS = [
   "国語", "数学", "英語", "物理", "化学", "生物", "地学", 
   "世界史", "日本史", "地理", "現代社会", "倫理", "政治・経済", "情報", "その他"
 ];
+
+const parseSmartInput = (text: string, currentSubjects: string[] = DEFAULT_SUBJECTS) => {
+  if (!text) return null;
+  
+  let title = text.trim();
+  let subject = "";
+  let estimatedHours = 1;
+  const now = new Date();
+  let deadlineDate = format(now, 'yyyy-MM-dd');
+  let deadlineTime = "23:59";
+  let priority: 'low' | 'medium' | 'high' = 'medium';
+  let scheduledDate = format(now, 'yyyy-MM-dd');
+
+  // 1. Estimate duration (e.g. 1.5h, 2.5時間, 30分)
+  const hoursMatch = title.match(/(\d+(?:\.\d+)?)\s*(?:時間|h|hrs)/i);
+  if (hoursMatch) {
+    estimatedHours = parseFloat(hoursMatch[1]);
+    title = title.replace(hoursMatch[0], '');
+  } else {
+    const minsMatch = title.match(/(\d+)\s*(?:分|m|mins)/i);
+    if (minsMatch) {
+      estimatedHours = Math.round((parseInt(minsMatch[1]) / 60) * 10) / 10;
+      title = title.replace(minsMatch[0], '');
+    }
+  }
+
+  // 2. Parse subject
+  const detectedSubject = currentSubjects.find(subj => title.toLowerCase().includes(subj.toLowerCase()));
+  if (detectedSubject) {
+    subject = detectedSubject;
+  } else {
+    if (title.includes("英")) subject = "英語";
+    else if (title.includes("数")) subject = "数学";
+    else if (title.includes("国") || title.includes("現文") || title.includes("古文") || title.includes("漢文")) subject = "国語";
+    else if (title.includes("物")) subject = "物理";
+    else if (title.includes("化")) subject = "化学";
+    else if (title.includes("生")) subject = "生物";
+    else if (title.includes("歴") || title.includes("日史") || title.includes("世史")) subject = "日本史";
+    else if (title.includes("地理")) subject = "地理";
+    else subject = currentSubjects[0] || "その他";
+  }
+
+  // 3. Parse priority
+  if (/テスト|定期テスト|試験|中間|期末|模試|重|高|至急|緊急|high/i.test(title)) {
+    priority = 'high';
+  } else if (/自主|予習|読書|低|趣味|low/i.test(title)) {
+    priority = 'low';
+  }
+
+  // 4. Parse deadline date
+  if (/今日|today/i.test(title)) {
+    deadlineDate = format(now, 'yyyy-MM-dd');
+    title = title.replace(/今日|today/gi, '');
+  } else if (/明日|tomorrow/i.test(title)) {
+    const tomorrow = new Date(now);
+    tomorrow.setDate(tomorrow.getDate() + 1);
+    deadlineDate = format(tomorrow, 'yyyy-MM-dd');
+    title = title.replace(/明日|tomorrow/gi, '');
+  } else if (/明後日/i.test(title)) {
+    const dayAfter = new Date(now);
+    dayAfter.setDate(dayAfter.getDate() + 2);
+    deadlineDate = format(dayAfter, 'yyyy-MM-dd');
+    title = title.replace(/明後日/gi, '');
+  } else if (/来週/i.test(title)) {
+    const nextWeek = new Date(now);
+    nextWeek.setDate(nextWeek.getDate() + 7);
+    deadlineDate = format(nextWeek, 'yyyy-MM-dd');
+    title = title.replace(/来週/gi, '');
+  }
+
+  // 5. Parse deadline time (e.g. 17:30, 17時)
+  const timeMatch = title.match(/(\d{1,2})[:：](\d{2})/);
+  if (timeMatch) {
+    const h = parseInt(timeMatch[1]).toString().padStart(2, '0');
+    const m = timeMatch[2];
+    deadlineTime = `${h}:${m}`;
+    title = title.replace(timeMatch[0], '');
+  } else {
+    const hourMatch = title.match(/(\d{1,2})\s*時/);
+    if (hourMatch) {
+      const h = parseInt(hourMatch[1]).toString().padStart(2, '0');
+      deadlineTime = `${h}:00`;
+      title = title.replace(hourMatch[0], '');
+    }
+  }
+
+  // Clean title: remove common fill words
+  title = title.replace(/まで(?:に)?/g, '');
+  title = title.replace(/優先度\s*[:：]\s*(?:高|中|低)/g, '');
+  title = title.replace(/priority\s*[:：]\s*(?:high|med|medium|low)/gi, '');
+  title = title.replace(/\s+/g, ' ').trim();
+  if (!title) {
+    title = "自動解析タスク";
+  }
+
+  return { title, subject, estimatedHours, deadlineDate, deadlineTime, priority, scheduledDate };
+};
 
 const APP_VERSION = '1.3.2';
 
@@ -298,96 +396,63 @@ const ThemeBackground = React.memo(({ theme }: { theme: string }) => {
     <>
       {theme === 'dog' && (
         <>
-          <div className="fixed inset-0 pointer-events-none z-0 overflow-hidden opacity-[0.06] text-[var(--m3-primary)] mix-blend-multiply flex items-center justify-center">
-            <motion.div
-              animate={{ rotate: [-2, 2, -2], x: [-10, 10, -10] }}
-              transition={{ duration: 30, repeat: Infinity, ease: "linear" }}
-            >
+          <div className="fixed inset-0 pointer-events-none z-0 overflow-hidden opacity-[0.06] text-[var(--m3-primary)] flex items-center justify-center">
+            <div className="animate-bg-dog-large">
               <Dog className="w-[120vw] h-[120vh] -rotate-12 translate-x-1/4 translate-y-1/4 stroke-[0.3]" />
-            </motion.div>
+            </div>
           </div>
-          <motion.div 
-            animate={{ y: [0, -15, 0], rotate: [12, 15, 12] }}
-            transition={{ duration: 12, repeat: Infinity, ease: "easeInOut" }}
-            className="fixed top-20 right-[10%] opacity-[0.08] pointer-events-none z-0 scale-150"
-          >
+          <div className="fixed top-20 right-[10%] opacity-[0.08] pointer-events-none z-0 scale-150 animate-bg-dog-small">
             <Dog className="w-40 h-40" />
-          </motion.div>
-          <motion.div 
-            animate={{ x: [0, 10, 0], rotate: [-45, -40, -45] }}
-            transition={{ duration: 16, repeat: Infinity, ease: "easeInOut" }}
-            className="fixed bottom-40 left-[5%] opacity-[0.08] pointer-events-none z-0"
-          >
+          </div>
+          <div className="fixed bottom-40 left-[5%] opacity-[0.08] pointer-events-none z-0 animate-bg-dog-paw">
             <PawPrint className="w-32 h-32" />
-          </motion.div>
+          </div>
         </>
       )}
       {theme === 'cat' && (
         <>
-          <div className="fixed inset-0 pointer-events-none z-0 overflow-hidden opacity-[0.06] text-[var(--m3-primary)] mix-blend-multiply flex items-center justify-center">
-            <motion.div
-              animate={{ rotate: [2, -2, 2], y: [-10, 10, -10] }}
-              transition={{ duration: 40, repeat: Infinity, ease: "linear" }}
-            >
+          <div className="fixed inset-0 pointer-events-none z-0 overflow-hidden opacity-[0.06] text-[var(--m3-primary)] flex items-center justify-center">
+            <div className="animate-bg-cat-large">
               <Cat className="w-[120vw] h-[120vh] rotate-12 translate-x-1/4 translate-y-1/4 stroke-[0.3]" />
-            </motion.div>
+            </div>
           </div>
-          <motion.div 
-            animate={{ scale: [1, 1.1, 1], rotate: [-12, -15, -12] }}
-            transition={{ duration: 14, repeat: Infinity, ease: "easeInOut" }}
-            className="fixed top-40 left-[15%] opacity-[0.08] pointer-events-none z-0"
-          >
+          <div className="fixed top-40 left-[15%] opacity-[0.08] pointer-events-none z-0 animate-bg-cat-small">
             <Cat className="w-48 h-48" />
-          </motion.div>
-          <motion.div 
-            animate={{ y: [0, -20, 0], rotate: [45, 50, 45] }}
-            transition={{ duration: 20, repeat: Infinity, ease: "easeInOut" }}
-            className="fixed bottom-20 right-[8%] opacity-[0.08] pointer-events-none z-0"
-          >
+          </div>
+          <div className="fixed bottom-20 right-[8%] opacity-[0.08] pointer-events-none z-0 animate-bg-cat-paw">
             <PawPrint className="w-24 h-24" />
-          </motion.div>
+          </div>
         </>
       )}
       {theme === 'animal' && (
         <>
-          <div className="fixed inset-0 pointer-events-none z-0 overflow-hidden opacity-[0.06] text-[var(--m3-primary)] mix-blend-multiply flex items-center justify-center">
-            <motion.div
-              animate={{ x: [-20, 20, -20] }}
-              transition={{ duration: 50, repeat: Infinity, ease: "linear" }}
-            >
+          <div className="fixed inset-0 pointer-events-none z-0 overflow-hidden opacity-[0.06] text-[var(--m3-primary)] flex items-center justify-center">
+            <div className="animate-bg-rabbit-large">
               <Rabbit className="w-[120vw] h-[120vh] -rotate-12 translate-x-1/4 translate-y-1/4 stroke-[0.3]" />
-            </motion.div>
+            </div>
           </div>
-          <motion.div 
-            animate={{ y: [0, -10, 0] }}
-            transition={{ duration: 8, repeat: Infinity, ease: "easeInOut" }}
-            className="fixed top-1/4 right-[5%] opacity-[0.08] pointer-events-none z-0 rotate-12"
-          >
+          <div className="fixed top-1/4 right-[5%] opacity-[0.08] pointer-events-none z-0 rotate-12 animate-bg-rabbit-small">
             <Rabbit className="w-56 h-56" />
-          </motion.div>
-          <motion.div 
-            animate={{ scale: [1, 1.2, 1] }}
-            transition={{ duration: 24, repeat: Infinity, ease: "linear" }}
-            className="fixed bottom-1/4 left-[10%] opacity-[0.08] pointer-events-none z-0 -rotate-12"
-          >
+          </div>
+          <div className="fixed bottom-1/4 left-[10%] opacity-[0.08] pointer-events-none z-0 -rotate-12 animate-bg-bird-left">
             <Bird className="w-32 h-32" />
-          </motion.div>
+          </div>
         </>
       )}
       {theme === 'flower' && (
         <>
-          <div className="fixed inset-0 pointer-events-none z-0 overflow-hidden opacity-[0.15] mix-blend-multiply">
-            <motion.div animate={{ y: [0, -15, 0], rotate: [0, 10, 0] }} transition={{ duration: 16, repeat: Infinity }} className="absolute top-[5%] left-[10%] text-pink-500"><Flower className="w-24 h-24" /></motion.div>
-            <motion.div animate={{ y: [0, 20, 0], rotate: [0, -15, 0] }} transition={{ duration: 24, repeat: Infinity }} className="absolute top-[15%] left-[40%] text-orange-400"><Flower2 className="w-16 h-16" /></motion.div>
-            <motion.div animate={{ scale: [1, 1.1, 1], rotate: [0, 5, 0] }} transition={{ duration: 20, repeat: Infinity }} className="absolute top-[8%] left-[75%] text-yellow-500"><Flower className="w-32 h-32" /></motion.div>
+          <div className="fixed inset-0 pointer-events-none z-0 overflow-hidden opacity-[0.15]">
+            <div className="absolute top-[5%] left-[10%] text-pink-500 animate-bg-float-1"><Flower className="w-24 h-24" /></div>
+            <div className="absolute top-[15%] left-[40%] text-orange-400 animate-bg-float-2"><Flower2 className="w-16 h-16" /></div>
+            <div className="absolute top-[8%] left-[75%] text-yellow-500 animate-bg-float-3"><Flower className="w-32 h-32" /></div>
             
-            <motion.div animate={{ x: [-10, 10, -10], rotate: [12, 15, 12] }} transition={{ duration: 30, repeat: Infinity }} className="absolute top-[45%] left-[5%] text-blue-400"><Flower2 className="w-20 h-20" /></motion.div>
-            <motion.div animate={{ rotate: 360 }} transition={{ duration: 80, repeat: Infinity, ease: "linear" }} className="absolute top-[50%] left-[50%] -translate-x-1/2 -translate-y-1/2 text-red-500 opacity-20"><Flower className="w-[40vw] h-[40vw] stroke-[0.5]" /></motion.div>
-            <motion.div animate={{ scale: [0.9, 1.05, 0.9], rotate: [-10, -5, -10] }} transition={{ duration: 28, repeat: Infinity }} className="absolute top-[40%] left-[85%] text-purple-400"><Flower className="w-28 h-28" /></motion.div>
+            <div className="absolute top-[45%] left-[5%] text-blue-400 animate-bg-float-4"><Flower2 className="w-20 h-20" /></div>
+            <div className="absolute top-[50%] left-[50%] -translate-x-1/2 -translate-y-1/2 text-red-500 opacity-20 animate-bg-spin-slow"><Flower className="w-[40vw] h-[40vw] stroke-[0.5]" /></div>
+            <div className="absolute top-[40%] left-[85%] text-purple-400 animate-bg-float-5"><Flower className="w-28 h-28" /></div>
             
-            <motion.div animate={{ y: [0, 30, 0], x: [0, 10, 0] }} transition={{ duration: 22, repeat: Infinity }} className="absolute bottom-[15%] left-[15%] text-red-400"><Flower className="w-20 h-20" /></motion.div>
-            <motion.div animate={{ rotate: -360 }} transition={{ duration: 100, repeat: Infinity, ease: "linear" }} className="absolute bottom-[10%] left-[45%] text-green-400"><Flower2 className="w-16 h-16" /></motion.div>
-            <motion.div animate={{ y: [0, -20, 0], scale: [1, 1.2, 1] }} transition={{ duration: 18, repeat: Infinity }} className="absolute bottom-[20%] left-[80%] text-pink-400"><Flower2 className="w-24 h-24" /></motion.div>
+            <div className="absolute bottom-[15%] left-[15%] text-red-400 animate-bg-float-6"><Flower className="w-20 h-20" /></div>
+            <div className="absolute bottom-[10%] left-[45%] text-green-400 animate-bg-spin-reverse"><Flower2 className="w-16 h-16" /></div>
+            <div className="absolute bottom-[20%] left-[80%] text-pink-400 animate-bg-float-7"><Flower2 className="w-24 h-24" /></div>
           </div>
         </>
       )}
@@ -450,15 +515,25 @@ export default function App() {
   }, [activeTab, subjectFilter]);
 
   // Reset modal subject when adding or editing
+  const [modalTitle, setModalTitle] = useState("");
+  const [modalEstimatedHours, setModalEstimatedHours] = useState("1");
+  const [smartInputText, setSmartInputText] = useState("");
+  const [useWeightedProgress, setUseWeightedProgress] = useState(true);
+
   useEffect(() => {
     if (isAdding) {
       setModalSubject("");
+      setModalTitle("");
+      setModalEstimatedHours("1");
+      setSmartInputText("");
     }
   }, [isAdding]);
 
   useEffect(() => {
     if (isEditing && editData) {
       setModalSubject(editData.subject);
+      setModalTitle(editData.title || "");
+      setModalEstimatedHours(String(editData.estimatedHours || 1));
     }
   }, [isEditing, editData]);
   
@@ -633,6 +708,12 @@ export default function App() {
     });
   }, [submissions, selectedDate]);
 
+  const selectedDateWorkload = useMemo(() => {
+    return selectedDateSubmissions
+      .filter(sub => sub.status !== 'completed')
+      .reduce((acc, sub) => acc + (sub.estimatedHours || 1), 0);
+  }, [selectedDateSubmissions]);
+
   const unscheduledSubmissions = useMemo(() => {
     return submissions.filter(sub => !sub.isDeleted && sub.status !== 'completed' && !sub.scheduledDate);
   }, [submissions]);
@@ -745,18 +826,46 @@ export default function App() {
     localStorage.setItem('app-language', language);
   }, [language]);
 
+  // Count-based progress (件数ベース)
+  const countProgress = useMemo(() => {
+    const validTasks = submissions.filter(s => !s.isDeleted);
+    if (validTasks.length === 0) return 0;
+    
+    const totalProgress = validTasks.reduce((sum, s) => {
+      const prog = s.status === 'completed' ? 100 : (s.progress || 0);
+      return sum + prog;
+    }, 0);
+    return Math.round(totalProgress / validTasks.length);
+  }, [submissions]);
+
+  // Time-Weighted progress (時間ベース)
+  const weightedProgress = useMemo(() => {
+    const validTasks = submissions.filter(s => !s.isDeleted);
+    if (validTasks.length === 0) return 0;
+    
+    let totalWeightedProgress = 0;
+    let totalWeight = 0;
+    
+    validTasks.forEach(s => {
+      const weight = s.estimatedHours || 1;
+      const prog = s.status === 'completed' ? 100 : (s.progress || 0);
+      totalWeightedProgress += prog * weight;
+      totalWeight += weight;
+    });
+    
+    if (totalWeight === 0) return 0;
+    return Math.round(totalWeightedProgress / totalWeight);
+  }, [submissions]);
+
+  // Overall progress used for visual rendering (based on user toggle)
   const overallProgress = useMemo(() => {
-    // Only current active tasks (exclude deleted and already completed)
-    const activeTasks = submissions.filter(s => !s.isDeleted && s.status !== 'completed');
-    
-    if (activeTasks.length === 0) {
-      // Check if there are any completed tasks (not deleted)
-      const hasCompleted = submissions.some(s => !s.isDeleted && s.status === 'completed');
-      return hasCompleted ? 100 : 0;
-    }
-    
-    const totalProgress = activeTasks.reduce((sum, s) => sum + (s.progress || 0), 0);
-    return Math.round(totalProgress / activeTasks.length);
+    return useWeightedProgress ? weightedProgress : countProgress;
+  }, [useWeightedProgress, weightedProgress, countProgress]);
+
+  const totalStudyLoad = useMemo(() => {
+    return submissions
+      .filter(s => !s.isDeleted && s.status !== 'completed')
+      .reduce((acc, s) => acc + (s.estimatedHours || 1), 0);
   }, [submissions]);
 
   const nearestDeadlinesCount = useMemo(() => {
@@ -863,13 +972,24 @@ export default function App() {
     );
 
     const unsubscribe = onSnapshot(q, (snapshot) => {
+      const parseDate = (val: any): Date | undefined => {
+        if (!val) return undefined;
+        if (typeof val.toDate === 'function') return val.toDate();
+        if (val instanceof Date) return val;
+        if (typeof val === 'object' && val.seconds !== undefined) {
+          return new Date(val.seconds * 1000 + (val.nanoseconds || 0) / 1000000);
+        }
+        const parsed = new Date(val);
+        return isNaN(parsed.getTime()) ? undefined : parsed;
+      };
+
       const data = snapshot.docs.map(doc => {
         const docData = doc.data();
         return {
           ...docData,
           id: doc.id,
-          deadline: (docData.deadline as Timestamp).toDate(),
-          scheduledDate: docData.scheduledDate ? (docData.scheduledDate as Timestamp).toDate() : undefined,
+          deadline: parseDate(docData.deadline) || new Date(),
+          scheduledDate: parseDate(docData.scheduledDate),
         } as Submission;
       });
       setSubmissions(data);
@@ -1051,6 +1171,7 @@ export default function App() {
       await signInWithPopup(auth, googleProvider);
     } catch (error) {
       console.error("Login Error:", error);
+      alert("Login Error: " + (error instanceof Error ? error.message : String(error)));
     }
   };
 
@@ -1059,6 +1180,18 @@ export default function App() {
       await signOut(auth);
     } catch (error) {
       console.error("Logout Error:", error);
+    }
+  };
+
+  const handleSmartParse = () => {
+    if (!smartInputText.trim()) return;
+    const parsed = parseSmartInput(smartInputText, subjects);
+    if (parsed) {
+      setModalTitle(parsed.title);
+      setModalSubject(parsed.subject);
+      setModalEstimatedHours(String(parsed.estimatedHours));
+      setModalPriority(parsed.priority);
+      showToast(language === 'ja' ? '解析に成功しました！' : 'Successfully parsed!');
     }
   };
 
@@ -1080,6 +1213,8 @@ export default function App() {
     const endPage = /^\d+$/.test(endPageRaw) ? parseInt(endPageRaw) : 0;
     const dateValue = formData.get('deadlineDate') as string;
     const timeValue = formData.get('deadlineTime') as string || "23:59";
+    const estimatedHoursRaw = formData.get('estimatedHours') as string;
+    const estimatedHours = estimatedHoursRaw ? parseFloat(estimatedHoursRaw) : 1;
 
     if (!title || !subject || !dateValue) return;
 
@@ -1126,6 +1261,7 @@ export default function App() {
           description: description || '',
           priority: priority || 'medium',
           progress: 0,
+          estimatedHours: estimatedHours || 1,
           status: 'pending',
           createdAt: serverTimestamp(),
           taskType,
@@ -1168,6 +1304,8 @@ export default function App() {
     // Strict integer validation
     const startPage = /^\d+$/.test(startPageStr) ? parseInt(startPageStr) : (editData.startPage || 0);
     const endPage = /^\d+$/.test(endPageStr) ? parseInt(endPageStr) : (editData.endPage || 0);
+    const estimatedHoursRaw = formData.get('estimatedHours') as string;
+    const estimatedHours = estimatedHoursRaw ? parseFloat(estimatedHoursRaw) : (editData.estimatedHours || 1);
 
     const [hours, minutes] = timeValue.split(':').map(Number);
     const [y, m, d] = dateValue.split('-').map(Number);
@@ -1175,6 +1313,7 @@ export default function App() {
 
     const updatePayload: any = {
       title, subject, description, priority, progress,
+      estimatedHours: estimatedHours || 1,
       deadline: Timestamp.fromDate(combinedDate)
     };
 
@@ -1746,14 +1885,34 @@ export default function App() {
           initial={{ opacity: 0, y: 10 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ duration: 0.4, ease: "easeOut" }}
-          className="bg-[var(--m3-primary-container)] rounded-[28px] p-6 w-full shadow-sm shrink-0"
+          className="bg-[var(--m3-primary-container)] rounded-[28px] p-6 w-full shadow-sm shrink-0 space-y-4"
         >
-          <div className="text-xs text-[var(--m3-on-primary-container)] opacity-70 uppercase tracking-[0.15em] font-black mb-1">{t.progress}</div>
-          <div className="flex items-baseline gap-1 text-[var(--m3-on-primary-container)]">
-            <span className="text-4xl font-light tracking-tighter">{overallProgress}</span>
-            <span className="text-sm font-bold opacity-70">%</span>
+          <div className="flex items-center justify-between">
+            <div className="text-xs text-[var(--m3-on-primary-container)] opacity-70 uppercase tracking-[0.15em] font-black">{t.progress}</div>
+            <button 
+              onClick={() => setUseWeightedProgress(!useWeightedProgress)}
+              className="text-[10px] font-bold px-2 py-1 rounded-full bg-[var(--m3-on-primary-container)]/10 text-[var(--m3-on-primary-container)] hover:bg-[var(--m3-on-primary-container)]/20 transition-all flex items-center gap-1"
+              title={t.howToWeighted}
+            >
+              <Info className="w-3 h-3" />
+              {useWeightedProgress ? t.weightedProgress : t.countProgress}
+            </button>
           </div>
-          <div className="h-2 w-full bg-[var(--m3-on-primary-container)]/10 rounded-full mt-4 overflow-hidden shrink-0">
+
+          <div className="flex items-baseline justify-between text-[var(--m3-on-primary-container)]">
+            <div className="flex items-baseline gap-1">
+              <span className="text-4xl font-light tracking-tighter">{overallProgress}</span>
+              <span className="text-sm font-bold opacity-70">%</span>
+            </div>
+            {useWeightedProgress && (
+              <div className="text-right">
+                <span className="text-xs font-semibold opacity-70 block">{t.totalLoad}</span>
+                <span className="text-sm font-bold">{totalStudyLoad.toFixed(1)} {t.hoursShort}</span>
+              </div>
+            )}
+          </div>
+
+          <div className="h-2.5 w-full bg-[var(--m3-on-primary-container)]/10 rounded-full overflow-hidden shrink-0">
             <motion.div 
               initial={{ width: 0 }}
               animate={{ width: `${overallProgress}%` }}
@@ -1761,6 +1920,16 @@ export default function App() {
               className="h-full bg-[var(--m3-primary)]"
             />
           </div>
+
+          {useWeightedProgress ? (
+            <p className="text-[10px] text-[var(--m3-on-primary-container)]/70 leading-normal font-medium mt-1">
+              {t.howToWeighted}
+            </p>
+          ) : (
+            <p className="text-[10px] text-[var(--m3-on-primary-container)]/70 leading-normal font-medium mt-1">
+              {language === 'ja' ? '※全てのタスクを等しく扱い、完了数と合計数の割合を示しています。' : '* Treats all tasks equally and shows completed count / total count.'}
+            </p>
+          )}
         </motion.div>
 
         <motion.div 
@@ -2785,6 +2954,56 @@ export default function App() {
                     </div>
                   </div>
 
+                  {/* Daily Workload Capacity Meter */}
+                  <div className="mx-1 p-4 rounded-3xl bg-[var(--m3-surface-container)] border border-[var(--m3-outline-variant)]/10 flex flex-col gap-2 shadow-sm">
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center gap-2">
+                        <Activity className="w-4 h-4 text-[var(--m3-primary)]" />
+                        <span className="text-xs font-black text-[var(--m3-on-surface-variant)] uppercase tracking-wider">{t.workloadCost}</span>
+                      </div>
+                      <div className="flex items-center gap-1.5">
+                        <span className={cn(
+                          "text-[10px] font-black px-2 py-0.5 rounded-full",
+                          selectedDateWorkload > 5 
+                            ? "bg-red-500/10 text-red-500 border border-red-500/20" 
+                            : selectedDateWorkload > 2 
+                              ? "bg-orange-500/10 text-orange-500 border border-orange-500/20" 
+                              : "bg-emerald-500/10 text-emerald-500 border border-emerald-500/20"
+                        )}>
+                          {selectedDateWorkload > 5 
+                            ? t.workloadHeavy 
+                            : selectedDateWorkload > 2 
+                              ? t.workloadBalanced 
+                              : t.workloadLight}
+                        </span>
+                      </div>
+                    </div>
+                    
+                    <div className="flex items-baseline gap-1">
+                      <span className="text-2xl font-black text-[var(--m3-on-surface)]">{selectedDateWorkload.toFixed(1)}</span>
+                      <span className="text-[10px] font-bold text-[var(--m3-on-surface-variant)] opacity-70">/ 5.0 {t.hoursShort} ({t.workloadCapacity})</span>
+                    </div>
+
+                    <div className="h-1.5 w-full bg-[var(--m3-outline-variant)]/10 rounded-full overflow-hidden shrink-0">
+                      <motion.div 
+                        initial={{ width: 0 }}
+                        animate={{ width: `${Math.min(100, (selectedDateWorkload / 5) * 100)}%` }}
+                        transition={{ duration: 0.8 }}
+                        className={cn(
+                          "h-full rounded-full transition-all duration-300",
+                          selectedDateWorkload > 5 ? "bg-red-500 animate-pulse" : selectedDateWorkload > 2 ? "bg-orange-500" : "bg-emerald-500"
+                        )}
+                      />
+                    </div>
+
+                    {selectedDateWorkload > 5 && (
+                      <div className="mt-1 text-[11px] font-bold text-red-500 flex items-start gap-1 leading-relaxed">
+                        <AlertTriangle className="w-3.5 h-3.5 shrink-0 mt-0.5" />
+                        <span>{t.overloadWarning}</span>
+                      </div>
+                    )}
+                  </div>
+
                   <AnimatePresence>
                     {isAddingEvent && (
                       <motion.div
@@ -2914,6 +3133,11 @@ export default function App() {
                                   "text-[9px] font-black uppercase tracking-tighter truncate max-w-[100px]",
                                   sub.isEvent ? "text-[var(--m3-secondary)]" : "text-[var(--m3-primary)]"
                                 )}>{sub.subject}</span>
+                                {!sub.isEvent && (
+                                  <span className="px-1.5 py-0.5 rounded bg-[var(--m3-primary)]/10 text-[var(--m3-primary)] text-[8px] font-black tracking-tight shrink-0">
+                                    {sub.estimatedHours || 1} {t.hoursShort}
+                                  </span>
+                                )}
                                 {sub.priority === 'high' && <div className="w-1.5 h-1.5 rounded-full bg-red-500 animate-pulse" />}
                               </div>
                               <h4 className="text-sm font-black text-[var(--m3-on-surface)] truncate group-hover:text-[var(--m3-primary)] transition-colors leading-tight">
@@ -2985,6 +3209,9 @@ export default function App() {
                               <div className="flex-1 min-w-0 pointer-events-none">
                                 <div className="flex items-center gap-2 mb-0.5">
                                   <span className="text-[9px] font-black uppercase tracking-tighter text-[var(--m3-secondary)] opacity-70 truncate max-w-[100px]">{sub.subject}</span>
+                                  <span className="px-1.5 py-0.5 rounded bg-[var(--m3-secondary)]/10 text-[var(--m3-secondary)] text-[8px] font-black tracking-tight shrink-0">
+                                    {sub.estimatedHours || 1} {t.hoursShort}
+                                  </span>
                                 </div>
                                 <h4 className="text-sm font-black text-[var(--m3-on-surface)] truncate group-hover:text-[var(--m3-secondary)] transition-colors leading-tight">{sub.title}</h4>
                               </div>
@@ -3381,7 +3608,7 @@ export default function App() {
                   <div className="space-y-4">
                     <h3 className="text-xs font-black text-[var(--m3-on-surface-variant)] uppercase tracking-[0.2em]">{t.recentActivity}</h3>
                     <div className="space-y-2 max-h-40 overflow-y-auto pr-2 custom-scrollbar">
-                      {selectedSubmission.activityLogs.slice().reverse().map(log => (
+                      {(selectedSubmission.activityLogs || []).slice().reverse().map(log => (
                         <div key={log.id} className="flex items-center gap-4 bg-[var(--m3-surface-container-low)] p-3 rounded-2xl border border-[var(--m3-outline-variant)]/10">
                           <div className="w-8 h-8 rounded-full bg-[var(--m3-primary-container)] flex items-center justify-center shrink-0">
                             <Zap className="w-3.5 h-3.5 text-[var(--m3-on-primary-container)]" />
@@ -3534,10 +3761,81 @@ export default function App() {
                 </button>
               </div>
               <form onSubmit={addSubmission} className="space-y-6">
+                {/* Natural Language Smart Parser */}
+                <div className="p-4 rounded-[20px] bg-[var(--m3-surface-container-high)] border border-[var(--m3-primary)]/15 space-y-3">
+                  <div className="flex items-center gap-2">
+                    <Sparkles className="w-4 h-4 text-[var(--m3-primary)] animate-pulse" />
+                    <label className="text-xs font-black text-[var(--m3-on-surface-variant)] uppercase tracking-wider">{t.naturalLanguageTitle}</label>
+                  </div>
+                  <div className="flex flex-col sm:flex-row gap-2">
+                    <input 
+                      type="text"
+                      value={smartInputText}
+                      onChange={(e) => setSmartInputText(e.target.value)}
+                      placeholder={t.naturalLanguagePlaceholder}
+                      className="flex-1 px-4 py-3 rounded-xl bg-[var(--m3-surface)] border border-[var(--m3-outline)]/15 focus:outline-none text-sm font-semibold text-[var(--m3-on-surface)] placeholder:text-[var(--m3-on-surface-variant)]/55"
+                      onKeyDown={(e) => {
+                        if (e.key === 'Enter') {
+                          e.preventDefault();
+                          handleSmartParse();
+                        }
+                      }}
+                    />
+                    <button
+                      type="button"
+                      onClick={handleSmartParse}
+                      className="px-4 py-3 rounded-xl bg-[var(--m3-primary)] text-[var(--m3-on-primary)] font-bold text-xs hover:bg-opacity-90 transition-all flex items-center justify-center gap-1.5 shadow-sm shrink-0"
+                    >
+                      <Sparkles className="w-3.5 h-3.5" />
+                      {t.naturalLanguageButton}
+                    </button>
+                  </div>
+                </div>
+
+                {/* Quick Presets */}
+                <div className="space-y-2">
+                  <span className="text-xs font-bold text-[var(--m3-on-surface-variant)] uppercase tracking-wider px-1">
+                    {t.quickPresets}
+                  </span>
+                  <div className="flex flex-wrap gap-1.5">
+                    {[
+                      { title: language === 'ja' ? '英語の宿題プリント' : 'English Homework', subject: '英語', hours: '0.5', priority: 'medium' },
+                      { title: language === 'ja' ? '数学の宿題・ワーク' : 'Math Practice', subject: '数学', hours: '1.0', priority: 'medium' },
+                      { title: language === 'ja' ? '中間テスト対策勉強' : 'Midterm Exam Prep', subject: '数学', hours: '3.0', priority: 'high' },
+                      { title: language === 'ja' ? '国語の漢字練習' : 'Kanji Practice', subject: '国語', hours: '0.5', priority: 'low' },
+                      { title: language === 'ja' ? '次の授業の予習・読書' : 'Pre-reading Prep', subject: 'その他', hours: '1.0', priority: 'low' }
+                    ].map((preset, idx) => (
+                      <button
+                        key={idx}
+                        type="button"
+                        onClick={() => {
+                          setModalTitle(preset.title);
+                          setModalSubject(preset.subject);
+                          setModalEstimatedHours(preset.hours);
+                          setModalPriority(preset.priority as any);
+                          showToast(language === 'ja' ? 'テンプレートを適用しました' : 'Template applied');
+                        }}
+                        className="text-xs font-bold px-3 py-1.5 rounded-xl bg-[var(--m3-surface-container-low)] hover:bg-[var(--m3-primary)]/10 border border-[var(--m3-outline)]/10 text-[var(--m3-on-surface)] hover:text-[var(--m3-primary)] transition-all flex items-center gap-1"
+                      >
+                        <Plus className="w-3 h-3" />
+                        {preset.title} ({preset.hours}h)
+                      </button>
+                    ))}
+                  </div>
+                </div>
+
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                   <div className="space-y-2">
                     <label className="text-xs font-bold text-[var(--m3-on-surface-variant)] uppercase tracking-widest px-1">{t.title}</label>
-                    <input name="title" required type="text" placeholder={t.titlePlaceholder} className="w-full px-5 py-4 rounded-2xl bg-[var(--m3-surface-container)] border border-[var(--m3-outline)]/10 focus:outline-none focus:ring-4 focus:ring-[var(--m3-primary)]/10 font-bold text-[var(--m3-on-surface)] transition-all placeholder:font-medium" />
+                    <input 
+                      name="title" 
+                      required 
+                      type="text" 
+                      value={modalTitle}
+                      onChange={(e) => setModalTitle(e.target.value)}
+                      placeholder={t.titlePlaceholder} 
+                      className="w-full px-5 py-4 rounded-2xl bg-[var(--m3-surface-container)] border border-[var(--m3-outline)]/10 focus:outline-none focus:ring-4 focus:ring-[var(--m3-primary)]/10 font-bold text-[var(--m3-on-surface)] transition-all placeholder:font-medium" 
+                    />
                   </div>
                   <div className="space-y-2">
                     <label className="text-xs font-black text-[var(--m3-on-surface-variant)] uppercase tracking-widest px-1">{t.subject}</label>
@@ -3683,6 +3981,23 @@ export default function App() {
                         type="date"
                         className="flex-1 px-5 py-4 rounded-2xl bg-[var(--m3-surface-container)] border border-[var(--m3-outline)]/10 focus:outline-none focus:ring-4 focus:ring-[var(--m3-primary)]/10 font-bold text-[var(--m3-on-surface)] transition-all placeholder:text-[var(--m3-on-surface-variant)]/50"
                       />
+                    </div>
+                  </div>
+                  <div className="space-y-3">
+                    <label className="text-xs font-bold text-[var(--m3-on-surface-variant)] uppercase tracking-widest px-1">{t.estimatedHours}</label>
+                    <div className="flex items-center gap-3">
+                      <input 
+                        name="estimatedHours"
+                        type="number"
+                        step="0.1"
+                        min="0.1"
+                        required
+                        value={modalEstimatedHours}
+                        onChange={(e) => setModalEstimatedHours(e.target.value)}
+                        placeholder={t.estimatedHoursPlaceholder}
+                        className="flex-1 px-5 py-4 rounded-2xl bg-[var(--m3-surface-container)] border border-[var(--m3-outline)]/10 focus:outline-none focus:ring-4 focus:ring-[var(--m3-primary)]/10 font-bold text-[var(--m3-on-surface)] transition-all"
+                      />
+                      <span className="text-sm font-bold text-[var(--m3-on-surface-variant)]">{t.hoursShort}</span>
                     </div>
                   </div>
                   <div className="space-y-3">
@@ -4096,7 +4411,14 @@ export default function App() {
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                   <div className="space-y-2">
                     <label className="text-xs font-bold text-[var(--m3-on-surface-variant)] uppercase tracking-widest px-1">{t.title}</label>
-                    <input name="title" defaultValue={editData.title} required type="text" className="w-full px-5 py-4 rounded-2xl bg-[var(--m3-surface-container)] border border-[var(--m3-outline)]/10 focus:outline-none focus:ring-4 focus:ring-[var(--m3-primary)]/10 font-bold text-[var(--m3-on-surface)] transition-all placeholder:font-medium" />
+                    <input 
+                      name="title" 
+                      value={modalTitle} 
+                      onChange={(e) => setModalTitle(e.target.value)}
+                      required 
+                      type="text" 
+                      className="w-full px-5 py-4 rounded-2xl bg-[var(--m3-surface-container)] border border-[var(--m3-outline)]/10 focus:outline-none focus:ring-4 focus:ring-[var(--m3-primary)]/10 font-bold text-[var(--m3-on-surface)] transition-all placeholder:font-medium" 
+                    />
                   </div>
                   <div className="space-y-2">
                     <label className="text-xs font-black text-[var(--m3-on-surface-variant)] uppercase tracking-widest px-1">{t.subject}</label>
@@ -4214,6 +4536,23 @@ export default function App() {
                         defaultValue={editData.scheduledDate ? format(editData.scheduledDate, 'yyyy-MM-dd') : ''}
                         className="flex-1 px-5 py-4 rounded-2xl bg-[var(--m3-surface-container)] border border-[var(--m3-outline)]/10 focus:outline-none focus:ring-4 focus:ring-[var(--m3-primary)]/10 font-bold text-[var(--m3-on-surface)] transition-all placeholder:text-[var(--m3-on-surface-variant)]/50"
                       />
+                    </div>
+                  </div>
+                  <div className="space-y-3">
+                    <label className="text-xs font-bold text-[var(--m3-on-surface-variant)] uppercase tracking-widest px-1">{t.estimatedHours}</label>
+                    <div className="flex items-center gap-3">
+                      <input 
+                        name="estimatedHours"
+                        type="number"
+                        step="0.1"
+                        min="0.1"
+                        required
+                        value={modalEstimatedHours}
+                        onChange={(e) => setModalEstimatedHours(e.target.value)}
+                        placeholder={t.estimatedHoursPlaceholder}
+                        className="flex-1 px-5 py-4 rounded-2xl bg-[var(--m3-surface-container)] border border-[var(--m3-outline)]/10 focus:outline-none focus:ring-4 focus:ring-[var(--m3-primary)]/10 font-bold text-[var(--m3-on-surface)] transition-all"
+                      />
+                      <span className="text-sm font-bold text-[var(--m3-on-surface-variant)]">{t.hoursShort}</span>
                     </div>
                   </div>
                   <div className="space-y-3">
