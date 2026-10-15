@@ -4,6 +4,12 @@ async function enter(page: Page) {
   await page.getByRole('button', { name: 'ログインせずに、この端末で始める' }).click();
   await expect(page.getByRole('navigation', { name: 'メインナビゲーション' })).toBeVisible();
 }
+async function openTask(page: Page, title: string) {
+  const heading = page.getByRole('heading', { name: title, exact: true });
+  // A list transition retains its outgoing card until the exit animation ends.
+  await expect(heading).toHaveCount(1);
+  await heading.click();
+}
 async function add(page: Page, title = '数学ワーク') {
   await page.getByRole('button', { name: '課題を追加', exact: true }).click();
   const dialog = page.getByRole('dialog', { name: '課題を追加 / Add assignment' });
@@ -17,14 +23,14 @@ async function add(page: Page, title = '数学ワーク') {
 test('create, edit, record, complete, reopen, reload and delete an assignment', async ({ page }) => {
   const errors: string[] = []; page.on('pageerror', error => errors.push(error.message));
   await enter(page); await add(page);
-  await page.getByRole('heading', { name: '数学ワーク', exact: true }).click();
+  await openTask(page, '数学ワーク');
   let detail = page.getByRole('dialog', { name: '課題の詳細 / Assignment details' });
   await detail.getByRole('button', { name: 'タスクを編集' }).click();
   const edit = page.getByRole('dialog', { name: '課題を編集 / Edit assignment' });
   await edit.getByRole('textbox', { name: 'タイトル', exact: true }).fill('数学ワーク 改訂');
   await edit.getByRole('textbox', { name: '詳細', exact: true }).fill('第2章を復習');
   await edit.locator('button[type="submit"]').click();
-  await page.getByRole('heading', { name: '数学ワーク 改訂', exact: true }).click();
+  await openTask(page, '数学ワーク 改訂');
   detail = page.getByRole('dialog', { name: '課題の詳細 / Assignment details' });
   await expect(detail.getByText('第2章を復習')).toBeVisible();
   await detail.getByRole('button', { name: '進捗を入力' }).click();
@@ -33,16 +39,16 @@ test('create, edit, record, complete, reopen, reload and delete an assignment', 
   await timer.getByRole('button', { name: '記録する' }).click();
   await expect(timer).not.toBeVisible();
   await page.reload();
-  await page.getByRole('heading', { name: '数学ワーク 改訂', exact: true }).click();
+  await openTask(page, '数学ワーク 改訂');
   detail = page.getByRole('dialog', { name: '課題の詳細 / Assignment details' });
   await expect(detail.getByText('+40%')).toBeVisible();
   await detail.getByRole('button', { name: '完了にする' }).click();
   await page.getByRole('navigation').getByRole('button', { name: '学習履歴' }).click();
-  await page.getByRole('heading', { name: '数学ワーク 改訂', exact: true }).click();
+  await openTask(page, '数学ワーク 改訂');
   detail = page.getByRole('dialog', { name: '課題の詳細 / Assignment details' });
   await detail.getByRole('button', { name: '進行中に戻す' }).click();
   await page.getByRole('navigation').getByRole('button', { name: '課題', exact: true }).click();
-  await page.getByRole('heading', { name: '数学ワーク 改訂', exact: true }).click();
+  await openTask(page, '数学ワーク 改訂');
   detail = page.getByRole('dialog', { name: '課題の詳細 / Assignment details' });
   await detail.getByRole('button', { name: '削除', exact: true }).click();
   await page.getByRole('dialog', { name: '確認 / Confirmation' }).getByRole('button', { name: 'はい' }).click();
