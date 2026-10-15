@@ -6,6 +6,8 @@ export interface ActivityLog {
   durationMinutes: number;
   progressIncrement: number; // pages or percentage
   type: 'pages' | 'percentage';
+  taskId?: string;
+  taskTitle?: string;
 }
 
 export interface Submission {
@@ -14,6 +16,7 @@ export interface Submission {
   title: string;
   subject: string;
   deadline: Date;
+  scheduledDate?: Date;
   progress: number; // 0 to 100
   status: SubmissionStatus;
   description?: string;
@@ -27,4 +30,10 @@ export interface Submission {
   isDeleted?: boolean;
   deletedAt?: any;
   completedAt?: any;
+  estimatedHours?: number;
+  isEvent?: boolean;
+  isAllDay?: boolean;
+  recurringId?: string;
+  hasMoreInSeries?: boolean;
+  sourceId?: string;
 }

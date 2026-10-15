@@ -44,6 +44,14 @@ service cloud.firestore {
              data.deadline is timestamp &&
              data.progress is number && data.progress >= 0 && data.progress <= 100 &&
              data.status in ['pending', 'in-progress', 'completed'] &&
+             (!('description' in data) || (data.description is string && data.description.size() <= 1000)) &&
+             (!('priority' in data) || data.priority in ['low', 'medium', 'high']) &&
+             (!('taskType' in data) || data.taskType in ['pages', 'percentage']) &&
+             (!('estimatedHours' in data) || (data.estimatedHours is number && data.estimatedHours > 0 && data.estimatedHours <= 10000)) &&
+             (!('scheduledDate' in data) || data.scheduledDate == null || data.scheduledDate is timestamp) &&
+             (!('activityLogs' in data) || data.activityLogs is list) &&
+             (!('taskType' in data) || data.taskType != 'pages' ||
+               (data.startPage is int && data.endPage is int && data.startPage >= 0 && data.endPage >= data.startPage)) &&
              data.createdAt is timestamp;
     }
 
@@ -56,8 +64,10 @@ service cloud.firestore {
       return data.keys().hasOnly(['theme', 'language', 'subjects', 'pomodoroDurations']) &&
              (!('theme' in data) || data.theme in ['lumina', 'light', 'dark', 'dog', 'cat', 'animal', 'flower']) &&
              (!('language' in data) || data.language in ['ja', 'en', 'vi']) &&
-             (!('subjects' in data) || data.subjects is list) &&
-             (!('pomodoroDurations' in data) || (data.pomodoroDurations is map && data.pomodoroDurations.work is number && data.pomodoroDurations.break is number));
+             (!('subjects' in data) || (data.subjects is list && data.subjects.size() <= 50)) &&
+             (!('pomodoroDurations' in data) || (data.pomodoroDurations is map &&
+               data.pomodoroDurations.work is number && data.pomodoroDurations.work >= 60 && data.pomodoroDurations.work <= 7200 &&
+               data.pomodoroDurations.break is number && data.pomodoroDurations.break >= 60 && data.pomodoroDurations.break <= 3600));
     }
 
     // ===============================================================

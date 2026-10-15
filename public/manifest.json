@@ -3,18 +3,15 @@
   "name": "Lumina Submission Manager",
   "icons": [
     {
-      "src": "/pwa-192x192.png",
-      "type": "image/png",
-      "sizes": "192x192"
-    },
-    {
-      "src": "/pwa-512x512.png",
-      "type": "image/png",
-      "sizes": "512x512",
-      "purpose": "any maskable"
+      "src": "/favicon.svg",
+      "type": "image/svg+xml",
+      "sizes": "any",
+      "purpose": "any"
     }
   ],
-  "start_url": ".",
+  "start_url": "/tasks",
+  "scope": "/",
+  "lang": "ja",
   "display": "standalone",
   "theme_color": "#0066FF",
   "background_color": "#ffffff"
