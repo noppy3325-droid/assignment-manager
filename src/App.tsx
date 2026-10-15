@@ -561,9 +561,9 @@ export default function App() {
   useEffect(() => {
     if (route.overlay === 'edit' && route.id) {
       const task = submissions.find(task => task.id === route.id);
-      if (task) { setEditData(task); setModalPriority(task.priority); }
+      if (task && editData?.id !== task.id) { setEditData(task); setModalPriority(task.priority); }
     }
-  }, [route.overlay, route.id, submissions]);
+  }, [route.overlay, route.id, submissions, editData?.id]);
   useModalFocus(!user ? (showTermsModal ? 'terms' : '') : confirmDialog ? 'confirm' : showTermsModal ? 'terms' : activeTimerId ? 'timer' : isFocusSelectorOpen ? 'focus' : selectedId ? 'detail' : isEditing ? 'edit' : isAdding ? 'add' : isSettingsOpen ? 'settings' : isCalendarOpen ? 'calendar' : isMobileMenuOpen ? 'menu' : showUpdateNotice ? 'update' : '');
   useEffect(() => { document.documentElement.lang = language; }, [language]);
 
@@ -1004,6 +1004,7 @@ export default function App() {
   const updateSubmission = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
     if (!user || !editData || savingRef.current) return;
+    const latestTask = submissions.find(task => task.id === editData.id) || editData;
 
     const formData = new FormData(e.currentTarget);
     const title = String(formData.get('title') || '').trim();
@@ -1011,7 +1012,7 @@ export default function App() {
     const description = formData.get('description') as string;
     const priority = formData.get('priority') as 'low' | 'medium' | 'high';
     const progressValue = formData.get('progress');
-    const progress = progressValue !== null ? (parseInt(progressValue as string) || 0) : editData.progress;
+    const progress = progressValue !== null ? (parseInt(progressValue as string) || 0) : latestTask.progress;
     const dateValue = formData.get('deadlineDate') as string;
     const timeValue = formData.get('deadlineTime') as string || "23:59";
     const startPageStr = formData.get('startPage') as string;
@@ -1047,7 +1048,7 @@ export default function App() {
       updatePayload.startPage = startPage;
       updatePayload.endPage = endPage;
       if (endPage < startPage) { showToast(language === 'ja' ? '終了ページは開始ページ以上にしてください' : 'Check the page range'); return; }
-      const current = Math.max(startPage - 1, Math.min(endPage, editData.currentPage ?? startPage - 1));
+      const current = Math.max(startPage - 1, Math.min(endPage, latestTask.currentPage ?? startPage - 1));
       updatePayload.currentPage = current;
       updatePayload.progress = current === endPage ? 100 : Math.min(99, Math.round((current - startPage + 1) / (endPage - startPage + 1) * 100));
     }
@@ -1326,7 +1327,7 @@ export default function App() {
 
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [selectedId, submissions, isAdding, isEditing, isCalendarOpen, isSettingsOpen, activeTab, highlightedTaskId, groupedSubmissions, activeTimerId, confirmDialog, showTermsModal, isFocusSelectorOpen, isSubjectDropdownOpen, searchQuery]);
+  }, [selectedId, submissions, isAdding, isEditing, isCalendarOpen, isSettingsOpen, activeTab, highlightedTaskId, groupedSubmissions, activeTimerId, confirmDialog, showTermsModal, isFocusSelectorOpen, isSubjectDropdownOpen, searchQuery, isMobileMenuOpen, user]);
 
   const selectedSubmission = submissions.find(s => s.id === selectedId);
 

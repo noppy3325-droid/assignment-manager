@@ -1,4 +1,15 @@
 import { test, expect, type Page } from '@playwright/test';
+// Development OIDC credentials stay in memory and are sent only to the exact
+// deployment origin, never to Firebase, fonts, redirects or test traces.
+test.beforeEach(async ({ page }) => {
+  const token = process.env.VERCEL_OIDC_TOKEN;
+  if (!token || !process.env.BASE_URL) return;
+  const origin = new URL(process.env.BASE_URL).origin;
+  await page.route(`${origin}/**`, async route => {
+    const response = await route.fetch({ headers: { ...route.request().headers(), 'x-vercel-trusted-oidc-idp-token': token }, maxRedirects: 0 });
+    await route.fulfill({ response });
+  });
+});
 async function enter(page: Page) {
   await page.goto('/tasks');
   await page.getByRole('button', { name: 'ログインせずに、この端末で始める' }).click();
@@ -217,4 +228,25 @@ test('deadline sorting stays chronological across different subjects', async ({ 
   await page.goto('/tasks');
   await page.getByRole('button', { name: '締切日順', exact: true }).click();
   await expect(page.locator('main h3')).toHaveText(['数学 早い締切', '英語 中間の締切', '数学 遅い締切']);
+});
+test('another tab can sync progress without erasing an edit draft', async ({ page, context }) => {
+  await enter(page); await add(page, '同期する課題');
+  await openTask(page, '同期する課題');
+  await page.getByRole('button', { name: 'タスクを編集' }).click();
+  const edit = page.getByRole('dialog', { name: '課題を編集 / Edit assignment' });
+  await edit.getByRole('textbox', { name: 'タイトル', exact: true }).fill('編集中のタイトル');
+  const second = await context.newPage();
+  await second.goto('/tasks');
+  await second.evaluate(() => {
+    const tasks = JSON.parse(localStorage.getItem('lumina-local-tasks-v1') || '[]');
+    tasks[0].progress = 33; tasks[0].status = 'in-progress';
+    localStorage.setItem('lumina-local-tasks-v1', JSON.stringify(tasks));
+  });
+  await expect(page.locator('main').getByText('33%', { exact: true })).toBeVisible();
+  await expect(edit.getByRole('textbox', { name: 'タイトル', exact: true })).toHaveValue('編集中のタイトル');
+  await edit.locator('button[type="submit"]').click();
+  await expect(edit).not.toBeVisible();
+  const saved = await page.evaluate(() => JSON.parse(localStorage.getItem('lumina-local-tasks-v1') || '[]'));
+  expect(saved[0].title).toBe('編集中のタイトル'); expect(saved[0].progress).toBe(33);
+  await second.close();
 });

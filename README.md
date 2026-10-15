@@ -91,6 +91,8 @@ npm audit --omit=dev
 
 Playwrightは本番ビルドの `dist` を使用します。ローカルのE2Eテスト前に `npm run build` を実行してください。外部環境を確認する場合は環境変数 `BASE_URL` を設定します。E2Eは端末保存を利用し、実アカウントのデータを書き換えません。Google OAuthと本番Firestoreの接続は、デプロイ先で別途確認してください。
 
+Vercel Authenticationで保護されたPreviewを確認する場合は、同じプロジェクトにリンクした認証済みVercel CLIで `vercel env run -- npm run test:e2e` を実行します。短期の `VERCEL_OIDC_TOKEN` が提供される場合、テストは対象URLのoriginだけに認証ヘッダーを付け、認証情報を含むトレースは保存しません。トークン値をソースや共有ファイルへ記載する必要はありません。
+
 GitHub Actionsで型チェック・単体テスト・本番ビルド・PC/モバイルE2E・依存監査を実行します。
 
 ### 公開前の動作確認
