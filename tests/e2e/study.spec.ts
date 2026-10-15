@@ -1,11 +1,11 @@
 import { test, expect, type Page } from '@playwright/test';
 // Development OIDC credentials stay in memory and are sent only to the exact
 // deployment origin, never to Firebase, fonts, redirects or test traces.
-test.beforeEach(async ({ page }) => {
+test.beforeEach(async ({ context }) => {
   const token = process.env.VERCEL_OIDC_TOKEN;
   if (!token || !process.env.BASE_URL) return;
   const origin = new URL(process.env.BASE_URL).origin;
-  await page.route(`${origin}/**`, async route => {
+  await context.route(`${origin}/**`, async route => {
     const response = await route.fetch({ headers: { ...route.request().headers(), 'x-vercel-trusted-oidc-idp-token': token }, maxRedirects: 0 });
     await route.fulfill({ response });
   });
